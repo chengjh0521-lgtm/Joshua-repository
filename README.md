@@ -59,6 +59,7 @@ SMTP_USERNAME=your_email_username
 SMTP_PASSWORD=your_email_password_or_app_password
 SMTP_FROM=your_email@example.com
 SMTP_USE_TLS=true
+SMTP_USE_SSL=false
 ```
 
 开发阶段建议保留 `NOVEL_AGENT_MOCK=true`，这样 Agent 会生成本地测试文本，不消耗 DeepSeek Token。需要真实调用 DeepSeek 时，填写真实 Key，并设置 `NOVEL_AGENT_MOCK=false`。
@@ -229,3 +230,25 @@ NOVEL_AGENT_MOCK=true
 DEEPSEEK_API_KEY=真实密钥
 NOVEL_AGENT_MOCK=false
 ```
+
+### 邮件提示 Connection unexpectedly closed
+
+通常是 SMTP 端口和加密方式不匹配。
+
+465 端口通常这样配：
+
+```env
+SMTP_PORT=465
+SMTP_USE_SSL=true
+SMTP_USE_TLS=false
+```
+
+587 端口通常这样配：
+
+```env
+SMTP_PORT=587
+SMTP_USE_SSL=false
+SMTP_USE_TLS=true
+```
+
+同时确认 `SMTP_PASSWORD` 使用的是邮箱授权码或应用专用密码，不是网页登录密码。

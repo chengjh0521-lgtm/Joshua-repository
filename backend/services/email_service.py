@@ -36,6 +36,7 @@ def send_generated_file_email(agent_root: Path, relative_path: str, to_address: 
     password = os.getenv("SMTP_PASSWORD", "").strip()
     from_address = os.getenv("SMTP_FROM", username).strip()
     use_tls = _truthy(os.getenv("SMTP_USE_TLS", "true"))
+    use_ssl = _truthy(os.getenv("SMTP_USE_SSL", "false")) or port == 465
 
     missing = [
         name
@@ -65,8 +66,13 @@ def send_generated_file_email(agent_root: Path, relative_path: str, to_address: 
     )
 
     try:
-        with smtplib.SMTP(host, port, timeout=30) as smtp:
-            if use_tls:
+        if use_ssl:
+            smtp_context = smtplib.SMTP_SSL(host, port, timeout=30)
+        else:
+            smtp_context = smtplib.SMTP(host, port, timeout=30)
+
+        with smtp_context as smtp:
+            if use_tls and not use_ssl:
                 smtp.starttls()
             smtp.login(username, password)
             smtp.send_message(message)
