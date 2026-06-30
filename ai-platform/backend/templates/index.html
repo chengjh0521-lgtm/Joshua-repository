@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI 创作平台</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --text: #1f2933;
+      --muted: #637083;
+      --line: #d9e0e8;
+      --primary: #146c63;
+      --primary-dark: #0f554f;
+      --accent: #b45309;
+      --danger: #b42318;
+      --ok: #157347;
+      --shadow: 0 12px 32px rgba(31, 41, 51, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      background: #ffffff;
+    }
+
+    .topbar {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 22px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.2;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--danger);
+    }
+
+    .dot.ok {
+      background: var(--ok);
+    }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 24px 20px 44px;
+    }
+
+    .auth-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: end;
+      margin-bottom: 20px;
+    }
+
+    .login-form {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(180px, 240px)) auto;
+      gap: 10px;
+      align-items: end;
+    }
+
+    label {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    input,
+    select,
+    textarea,
+    button {
+      font: inherit;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 11px;
+      color: var(--text);
+      background: #fff;
+      outline: none;
+    }
+
+    textarea {
+      min-height: 96px;
+      resize: vertical;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(20, 108, 99, 0.14);
+    }
+
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      background: var(--primary);
+      color: #fff;
+      cursor: pointer;
+      min-height: 41px;
+    }
+
+    button:hover {
+      background: var(--primary-dark);
+    }
+
+    button.secondary {
+      background: #e8edf2;
+      color: var(--text);
+    }
+
+    button.secondary:hover {
+      background: #dbe3eb;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .side-grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .card h2,
+    .card h3 {
+      margin: 0 0 10px;
+      font-size: 20px;
+    }
+
+    .card h3 {
+      font-size: 17px;
+    }
+
+    .muted {
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 14px 0;
+    }
+
+    .wide {
+      grid-column: 1 / -1;
+    }
+
+    .result {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    pre {
+      margin: 0;
+      min-height: 180px;
+      max-height: 360px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #111827;
+      color: #e5e7eb;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .preview pre {
+      background: #fff;
+      color: var(--text);
+    }
+
+    .message {
+      min-height: 24px;
+      margin-top: 8px;
+      color: var(--accent);
+      font-size: 14px;
+    }
+
+    .file-list {
+      margin-top: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .file-link {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px 10px;
+      background: #fbfcfd;
+      color: var(--text);
+      text-decoration: none;
+      overflow-wrap: anywhere;
+    }
+
+    .badge {
+      display: inline-flex;
+      width: fit-content;
+      border-radius: 999px;
+      padding: 4px 9px;
+      background: #eef6f4;
+      color: var(--primary);
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+
+    @media (max-width: 900px) {
+      .auth-row,
+      .grid,
+      .result {
+        grid-template-columns: 1fr;
+      }
+
+      .login-form,
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .wide {
+        grid-column: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="topbar">
+      <div>
+        <h1>AI 创作平台</h1>
+        <div class="muted">本地开发、服务器部署的创作 Agent MVP</div>
+      </div>
+      <div class="status">
+        <span id="status-dot" class="dot"></span>
+        <span id="login-status">正在读取登录状态...</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="auth-row">
+      <form id="login-form" class="login-form">
+        <label>
+          用户名
+          <input id="username" autocomplete="username" value="admin">
+        </label>
+        <label>
+          密码
+          <input id="password" type="password" autocomplete="current-password">
+        </label>
+        <button type="submit">登录</button>
+      </form>
+      <button id="logout-button" class="secondary" type="button">退出登录</button>
+    </section>
+    <div id="auth-message" class="message"></div>
+
+    <section class="grid">
+      <article class="card">
+        <span class="badge">已接入</span>
+        <h2>小说 Agent</h2>
+        <p class="muted">支持状态查看、初始化、生成短篇、写新章节、承接下一章。执行前必须登录。</p>
+
+        <div class="form-grid">
+          <label>
+            操作类型
+            <select id="novel-action">
+              <option value="status">status</option>
+              <option value="init">init</option>
+              <option value="short">short</option>
+              <option value="write">write</option>
+              <option value="next">next</option>
+            </select>
+          </label>
+          <label>
+            words
+            <input id="novel-words" type="number" min="300" max="20000" step="100" placeholder="2500">
+          </label>
+          <label class="wide">
+            goal
+            <textarea id="novel-goal" placeholder="写一个发生在雨夜便利店的悬疑短篇，结尾反转但要合情合理"></textarea>
+          </label>
+          <label>
+            genre
+            <input id="novel-genre" placeholder="悬疑爽文">
+          </label>
+          <label>
+            style
+            <input id="novel-style" placeholder="冷静克制，结尾有余味">
+          </label>
+        </div>
+
+        <button id="run-novel" type="button">执行</button>
+        <div id="novel-message" class="message"></div>
+
+        <div class="result">
+          <div>
+            <h3>执行结果</h3>
+            <pre id="run-result">等待执行...</pre>
+          </div>
+          <div class="preview">
+            <h3>最新输出文件预览</h3>
+            <pre id="latest-preview">暂无输出。</pre>
+          </div>
+        </div>
+      </article>
+
+      <aside class="side-grid">
+        <article class="card">
+          <span class="badge">后续接入</span>
+          <h3>知乎写作 Agent</h3>
+          <p class="muted">登录后可使用，第一版先保留入口。</p>
+        </article>
+        <article class="card">
+          <span class="badge">后续接入</span>
+          <h3>数学文章 Agent</h3>
+          <p class="muted">登录后可使用，第一版先保留入口。</p>
+        </article>
+        <article class="card">
+          <span class="badge">后续接入</span>
+          <h3>金融文章 Agent</h3>
+          <p class="muted">登录后可使用，第一版先保留入口。</p>
+        </article>
+        <article class="card">
+          <h3>最近文件</h3>
+          <div id="file-list" class="file-list muted">登录后显示。</div>
+        </article>
+      </aside>
+    </section>
+  </main>
+
+  <script>
+    const state = { authenticated: false };
+    const loginStatus = document.getElementById("login-status");
+    const statusDot = document.getElementById("status-dot");
+    const authMessage = document.getElementById("auth-message");
+    const novelMessage = document.getElementById("novel-message");
+    const resultBox = document.getElementById("run-result");
+    const latestPreview = document.getElementById("latest-preview");
+    const fileList = document.getElementById("file-list");
+
+    async function requestJson(url, options = {}) {
+      const response = await fetch(url, {
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+        ...options,
+      });
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : {};
+      if (!response.ok) {
+        throw new Error(data.detail || "请求失败。");
+      }
+      return data;
+    }
+
+    function renderAuth(user) {
+      state.authenticated = Boolean(user.authenticated);
+      loginStatus.textContent = state.authenticated ? `已登录：${user.username}` : "未登录";
+      statusDot.classList.toggle("ok", state.authenticated);
+    }
+
+    async function refreshMe() {
+      const user = await requestJson("/api/auth/me");
+      renderAuth(user);
+      if (state.authenticated) {
+        await refreshFiles();
+      }
+    }
+
+    async function refreshFiles() {
+      try {
+        const files = await requestJson("/api/novel/files");
+        if (!files.length) {
+          fileList.textContent = "暂无输出文件。";
+          return;
+        }
+        fileList.innerHTML = "";
+        files.slice(0, 6).forEach((file) => {
+          const link = document.createElement("a");
+          link.className = "file-link";
+          link.href = `/api/novel/files/${file.id}`;
+          link.target = "_blank";
+          link.textContent = file.relative_path;
+          fileList.appendChild(link);
+        });
+      } catch (error) {
+        fileList.textContent = error.message;
+      }
+    }
+
+    document.getElementById("login-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      authMessage.textContent = "";
+      try {
+        const data = await requestJson("/api/auth/login", {
+          method: "POST",
+          body: JSON.stringify({
+            username: document.getElementById("username").value,
+            password: document.getElementById("password").value,
+          }),
+        });
+        renderAuth(data);
+        authMessage.textContent = "登录成功。";
+        await refreshFiles();
+      } catch (error) {
+        authMessage.textContent = error.message;
+      }
+    });
+
+    document.getElementById("logout-button").addEventListener("click", async () => {
+      await requestJson("/api/auth/logout", { method: "POST", body: "{}" });
+      renderAuth({ authenticated: false, username: null });
+      fileList.textContent = "登录后显示。";
+      authMessage.textContent = "已退出登录。";
+    });
+
+    document.getElementById("run-novel").addEventListener("click", async () => {
+      novelMessage.textContent = "";
+      if (!state.authenticated) {
+        novelMessage.textContent = "请先登录后再使用该功能。";
+        return;
+      }
+
+      resultBox.textContent = "执行中...";
+      latestPreview.textContent = "等待输出...";
+      const words = document.getElementById("novel-words").value;
+      const payload = {
+        action: document.getElementById("novel-action").value,
+        goal: document.getElementById("novel-goal").value,
+        genre: document.getElementById("novel-genre").value,
+        style: document.getElementById("novel-style").value,
+      };
+      if (words) {
+        payload.words = Number(words);
+      }
+
+      try {
+        const data = await requestJson("/api/novel/run", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        resultBox.textContent = [
+          `returncode: ${data.returncode}`,
+          "",
+          "stdout:",
+          data.stdout || "(empty)",
+          "",
+          "stderr:",
+          data.stderr || "(empty)",
+        ].join("\n");
+        latestPreview.textContent = data.latest_file
+          ? `${data.latest_file.relative_path}\n\n${data.latest_file.preview}`
+          : "暂无输出。";
+        await refreshFiles();
+      } catch (error) {
+        resultBox.textContent = error.message;
+        latestPreview.textContent = "执行失败。";
+      }
+    });
+
+    refreshMe().catch((error) => {
+      loginStatus.textContent = "登录状态读取失败";
+      authMessage.textContent = error.message;
+    });
+  </script>
+</body>
+</html>
