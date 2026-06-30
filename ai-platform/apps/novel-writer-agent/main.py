@@ -196,6 +196,20 @@ def call_deepseek(prompt: str, max_words: int, purpose: str) -> str:
     if not api_key:
         raise RuntimeError("未配置 DEEPSEEK_API_KEY。")
 
+    if purpose == "short":
+        system_prompt = (
+            "你是成熟的中文短篇小说作者。短篇不是长篇开头，也不是第一章。"
+            "你必须写一个小体量但完整闭合的故事：核心问题出现、升级、转折、答案揭示、结尾收束。"
+            "不许写成世界观序章、连载开端、角色觉醒开局或下一章预告。"
+            "只创作原创内容，禁止抄袭具体人物、桥段、台词、设定和世界观。"
+        )
+    else:
+        system_prompt = (
+            "你是成熟的中文类型小说作者和严厉的自审编辑。"
+            "只创作原创内容，禁止抄袭具体人物、桥段、台词、设定和世界观。"
+            "长篇只写当前一章，不要输出创作课、解释、Markdown 标题或提示词分析。"
+        )
+
     response = httpx.post(
         f"{base_url}/chat/completions",
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
@@ -204,12 +218,7 @@ def call_deepseek(prompt: str, max_words: int, purpose: str) -> str:
             "messages": [
                 {
                     "role": "system",
-                    "content": (
-                        "你是成熟的中文类型小说作者和严厉的自审编辑。"
-                        "只创作原创内容，禁止抄袭具体人物、桥段、台词、设定和世界观。"
-                        "短篇必须完整独立，长篇只写当前一章。"
-                        "不要输出创作课、解释、Markdown 标题或提示词分析。"
-                    ),
+                    "content": system_prompt,
                 },
                 {"role": "user", "content": prompt},
             ],
@@ -326,6 +335,23 @@ def quality_rules() -> str:
     )
 
 
+def short_story_rules(min_words: int, max_words: int) -> str:
+    paragraph_cap = max(6, min(18, max_words // 180))
+    return (
+        "短篇完整性硬约束：\n"
+        "- 这是一篇短故事，不是长篇小说的第一章、序章、设定集或人物开局。\n"
+        "- 只围绕一个核心事件展开；控制在 1 个主要场景，必要时最多 2 个场景。\n"
+        "- 主要人物控制在 1-3 人，不铺开家族、组织、世界观、能力体系或长期任务线。\n"
+        "- 开头 2 段内必须出现具体冲突或异常，不要用大段背景解释。\n"
+        "- 中段必须让主角做一个具体选择，并因此付出一个小但明确的代价。\n"
+        "- 结尾必须回答开头提出的核心问题，关闭主冲突；可以有余味，但不能靠“未完待续”“更大的阴谋刚开始”“下一章”制造悬念。\n"
+        "- 反转如果出现，必须来自前文已经出现的物件、动作、错觉或信息差。\n"
+        "- 正文不要超过 "
+        f"{paragraph_cap} 个自然段；字数控制在 {min_words}-{max_words} 字之间。\n"
+        "- 输出前自检：如果读起来像长篇被截断，请重写成闭合短篇。\n"
+    )
+
+
 def write_chapter(goal: str, genre: str, style: str, min_words: int, max_words: int, de_ai: bool, is_next: bool) -> None:
     ensure_dirs()
     state = load_json(STATE_FILE, {"chapter_count": 0})
@@ -379,16 +405,17 @@ def write_chapter(goal: str, genre: str, style: str, min_words: int, max_words: 
 def write_short(goal: str, genre: str, style: str, min_words: int, max_words: int, de_ai: bool) -> None:
     ensure_dirs()
     prompt = (
-        "请写一个完整、独立、原创的中文短篇小说。\n"
-        "这是短篇小说，不是长篇章节，也不是系列续作。\n"
+        "请写一个完整、独立、原创的中文短篇故事。\n"
+        "目标是“小体量的完整故事”，不是“长篇小说被截断的一章”。\n"
         "严禁读取、承接、引用任何历史记忆、上一章、前文或之前短篇；只根据本次用户描述创作。\n"
         f"题材：{genre or '未指定'}\n风格：{style or '未指定'}\n"
         f"字数范围：{word_range(min_words, max_words)}\n用户描述：{goal}\n"
         f"{de_ai_instruction(de_ai)}\n"
         f"{quality_rules()}\n"
-        "硬性要求：\n"
-        "- 一次性完成开端、发展、转折、高潮、结尾。\n"
-        "- 不要自动续写下一篇，不要留下“下一章”。\n"
+        f"{short_story_rules(min_words, max_words)}\n"
+        "输出内容要求：\n"
+        "- 一次性完成开端、发展、转折、高潮、结尾，核心事件必须在文内解决。\n"
+        "- 不要自动续写下一篇，不要留下“下一章”，不要写成长篇开局。\n"
         "- 不要写创作课、提纲、解释说明或 Markdown 标题。\n"
         "- 每个自然段用空行分隔。\n"
         "- 可以借鉴抽象类型节奏和情绪曲线，但禁止复用具体作品的人物、设定、能力体系、世界观、桥段、台词或剧情结构。\n"
