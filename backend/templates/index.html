@@ -381,7 +381,13 @@
 
     function renderAuth(user) {
       state.authenticated = Boolean(user.authenticated);
-      loginStatus.textContent = state.authenticated ? `已登录：${user.username}` : "未登录";
+      if (!state.authenticated) {
+        loginStatus.textContent = "未登录";
+      } else if (user.quota_limit === null || user.quota_limit === undefined) {
+        loginStatus.textContent = `已登录：${user.username}（无限额）`;
+      } else {
+        loginStatus.textContent = `已登录：${user.username}（剩余 ${user.quota_remaining}/${user.quota_limit} 次）`;
+      }
       statusDot.classList.toggle("ok", state.authenticated);
     }
 
@@ -587,6 +593,9 @@
         latestPreview.textContent = data.latest_file
           ? `${data.latest_file.relative_path}\n\n${data.latest_file.preview}`
           : "暂无输出。";
+        if (data.account) {
+          renderAuth(data.account);
+        }
         await refreshFiles();
       } catch (error) {
         resultBox.textContent = error.message;

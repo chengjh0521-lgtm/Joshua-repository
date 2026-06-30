@@ -12,4 +12,5 @@ services:
       - ./apps/novel-writer-agent/output:/app/apps/novel-writer-agent/output
       - ./apps/novel-writer-agent/novel_memory:/app/apps/novel-writer-agent/novel_memory
       - ./apps/novel-writer-agent/data:/app/apps/novel-writer-agent/data
+      - ./backend/data:/app/backend/data
     restart: unless-stopped

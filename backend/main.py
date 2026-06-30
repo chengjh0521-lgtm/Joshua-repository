@@ -79,12 +79,21 @@ async def me(request: Request):
 
 @app.post("/api/novel/run")
 async def novel_run(request: Request, payload: NovelRunPayload):
-    auth_service.require_login(request)
+    username = auth_service.require_login(request)
     data = payload.model_dump()
+    should_consume_quota = auth_service.is_token_action(data)
+    if should_consume_quota:
+        auth_service.ensure_quota_available(username)
+
     try:
         result = run_novel_agent(AGENT_ROOT, data)
     except NovelActionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if should_consume_quota and result.get("returncode") == 0:
+        result["account"] = {"authenticated": True, **auth_service.consume_quota(username)}
+    else:
+        result["account"] = auth_service.current_user(request)
 
     result["email"] = {"requested": payload.send_email, "sent": False, "message": ""}
     if payload.send_email and result.get("returncode") == 0 and result.get("latest_file"):
