@@ -30,6 +30,12 @@ PATTERNS_FILE = MEMORY_DIR / "extracted_patterns.txt"
 WINDOWS_FORBIDDEN = r'<>:"/\|?*'
 
 
+def section(text: str, name: str) -> str:
+    pattern = rf"---{re.escape(name)}---\s*(.*?)(?=\n---[A-Z_]+---|\Z)"
+    match = re.search(pattern, text, flags=re.S)
+    return match.group(1).strip() if match else ""
+
+
 def ensure_dirs() -> None:
     for path in (
         DATA_DIR,
@@ -183,7 +189,7 @@ def build_project(genre: str, style: str) -> None:
     print("长篇项目记忆已建立。")
 
 
-def call_deepseek(prompt: str, max_words: int) -> str:
+def call_deepseek(prompt: str, max_words: int, purpose: str) -> str:
     api_key = os.getenv("DEEPSEEK_API_KEY", "")
     model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
     base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/")
@@ -199,12 +205,15 @@ def call_deepseek(prompt: str, max_words: int) -> str:
                 {
                     "role": "system",
                     "content": (
-                        "你是一个原创写作助手。只创作原创内容，禁止抄袭具体人物、桥段、台词、设定和世界观。"
+                        "你是成熟的中文类型小说作者和严厉的自审编辑。"
+                        "只创作原创内容，禁止抄袭具体人物、桥段、台词、设定和世界观。"
+                        "短篇必须完整独立，长篇只写当前一章。"
+                        "不要输出创作课、解释、Markdown 标题或提示词分析。"
                     ),
                 },
                 {"role": "user", "content": prompt},
             ],
-            "temperature": 0.8,
+            "temperature": 0.82 if purpose == "short" else 0.78,
             "max_tokens": max(1000, min(max_words * 2, 8000)),
         },
         timeout=120,
@@ -262,10 +271,23 @@ def generate_text(prompt: str, min_words: int, max_words: int, de_ai: bool, purp
     mock_enabled = os.getenv("NOVEL_AGENT_MOCK", "true").lower() != "false"
     if mock_enabled:
         return mock_text(prompt, min_words, max_words, de_ai, purpose)
-    return call_deepseek(prompt, max_words)
+    return call_deepseek(prompt, max_words, purpose)
 
 
 def split_notes(content: str) -> tuple[str, str]:
+    structured_body = section(content, "BODY") or section(content, "CHAPTER")
+    structured_notes = section(content, "NOTES") or section(content, "SELF_REVIEW")
+    if structured_body:
+        title = section(content, "TITLE")
+        clean = structured_body.strip() + "\n"
+        with_notes_parts = []
+        if title:
+            with_notes_parts.append(f"标题：{title}")
+        with_notes_parts.append(clean.strip())
+        if structured_notes:
+            with_notes_parts.append(f"【备注】\n{structured_notes.strip()}")
+        return clean, "\n\n".join(with_notes_parts).strip() + "\n"
+
     marker = "【备注】"
     if marker not in content:
         return content.strip() + "\n", content.strip() + "\n"
@@ -274,6 +296,9 @@ def split_notes(content: str) -> tuple[str, str]:
 
 
 def title_from_content(content: str, fallback: str) -> str:
+    structured_title = section(content, "TITLE")
+    if structured_title:
+        return safe_filename(structured_title, fallback)
     first_line = next((line.strip() for line in content.splitlines() if line.strip()), "")
     first_line = re.sub(r"^标题[:：]\s*", "", first_line)
     return safe_filename(first_line, fallback)
@@ -284,7 +309,20 @@ def de_ai_instruction(de_ai: bool) -> str:
         return "不需要额外去 AI 味处理。"
     return (
         "请降低 AI 腔：减少空泛总结和套路化转折，多用具体动作、感官细节、人物选择和自然短句；"
-        "避免过度整齐的排比、模板化段落和说教式结尾。"
+        "避免过度整齐的排比、模板化段落、解释型心理活动和说教式结尾。"
+    )
+
+
+def quality_rules() -> str:
+    return (
+        "质量要求：\n"
+        "- 开篇尽快进入具体场景，不写泛泛背景介绍。\n"
+        "- 用动作、对话、物件、环境变化承载信息，不用作者跳出来解释。\n"
+        "- 人物每一次选择都要有压力、代价或误判。\n"
+        "- 每 3-6 个自然段推进一次新信息或局势变化。\n"
+        "- 少用“他知道”“这一刻”“命运齿轮”“空气仿佛凝固”“一种说不出的感觉”等模板句。\n"
+        "- 不要用整齐排比堆情绪，不要写成故事梗概。\n"
+        "- 输出前在内部自检并改写一遍，正文只给最终稿。\n"
     )
 
 
@@ -300,15 +338,20 @@ def write_chapter(goal: str, genre: str, style: str, min_words: int, max_words: 
         f"字数范围：{word_range(min_words, max_words)}\n"
         f"用户描述：{goal}\n"
         f"{de_ai_instruction(de_ai)}\n"
+        f"{quality_rules()}\n"
         f"长篇记忆：{json.dumps(memory, ensure_ascii=False)[:5000]}\n"
-        "要求：只生成本章，不一次性生成整本；保持原创。"
+        "要求：只生成本章，不一次性生成整本；保持原创。\n"
+        "输出必须使用：\n"
+        "---TITLE---\n章节标题，不要带第几章。\n"
+        "---BODY---\n章节正文。\n"
+        "---NOTES---\n简述本章钩子、连续性和去 AI 处理。"
     )
     content = generate_text(prompt, min_words, max_words, de_ai, purpose="chapter")
     clean, with_notes = split_notes(content)
     title = title_from_content(content, f"第{chapter_number:03d}章")
     filename = f"第{chapter_number:03d}章_{title}.txt"
-    write_text(CHAPTERS_CLEAN_DIR / filename, clean)
     write_text(CHAPTERS_WITH_NOTES_DIR / filename, with_notes)
+    write_text(CHAPTERS_CLEAN_DIR / filename, clean)
 
     memory.setdefault("chapter_summaries", []).append(
         {
@@ -336,19 +379,31 @@ def write_chapter(goal: str, genre: str, style: str, min_words: int, max_words: 
 def write_short(goal: str, genre: str, style: str, min_words: int, max_words: int, de_ai: bool) -> None:
     ensure_dirs()
     prompt = (
-        "请写一个独立短篇，不更新长篇记忆。\n"
+        "请写一个完整、独立、原创的中文短篇小说。\n"
+        "这是短篇小说，不是长篇章节，也不是系列续作。\n"
+        "严禁读取、承接、引用任何历史记忆、上一章、前文或之前短篇；只根据本次用户描述创作。\n"
         f"题材：{genre or '未指定'}\n风格：{style or '未指定'}\n"
         f"字数范围：{word_range(min_words, max_words)}\n用户描述：{goal}\n"
         f"{de_ai_instruction(de_ai)}\n"
-        "要求：原创，结尾有余味，禁止抄袭具体作品。"
+        f"{quality_rules()}\n"
+        "硬性要求：\n"
+        "- 一次性完成开端、发展、转折、高潮、结尾。\n"
+        "- 不要自动续写下一篇，不要留下“下一章”。\n"
+        "- 不要写创作课、提纲、解释说明或 Markdown 标题。\n"
+        "- 每个自然段用空行分隔。\n"
+        "- 可以借鉴抽象类型节奏和情绪曲线，但禁止复用具体作品的人物、设定、能力体系、世界观、桥段、台词或剧情结构。\n"
+        "输出必须使用：\n"
+        "---TITLE---\n短篇标题。\n"
+        "---BODY---\n短篇正文。\n"
+        "---NOTES---\n简述自审结果、去 AI 处理和原创性边界。"
     )
     content = generate_text(prompt, min_words, max_words, de_ai, purpose="short")
     clean, with_notes = split_notes(content)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     title = title_from_content(content, "独立短篇")
     filename = f"短篇_{timestamp}_{title}.txt"
-    write_text(SHORT_CLEAN_DIR / filename, clean)
     write_text(SHORT_WITH_NOTES_DIR / filename, with_notes)
+    write_text(SHORT_CLEAN_DIR / filename, clean)
     print(f"短篇已生成：{filename}")
 
 
