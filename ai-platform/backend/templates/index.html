@@ -92,6 +92,22 @@
       box-shadow: 0 0 0 3px rgba(20, 108, 99, 0.14);
     }
 
+    .field.invalid input,
+    .field.invalid select,
+    .field.invalid textarea {
+      border-color: var(--danger);
+      box-shadow: 0 0 0 3px rgba(180, 35, 24, 0.13);
+    }
+
+    .field-error {
+      display: none;
+      color: var(--danger);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .field.invalid .field-error { display: block; }
+
     button {
       border: 0;
       border-radius: 8px;
@@ -236,36 +252,43 @@
         <p class="muted">生成内容会保存为 txt。执行生成、查看文件和邮件发送都需要登录。</p>
 
         <div class="form-grid">
-          <label>
+          <label class="field">
             工具操作
             <select id="novel-action">
               <option value="generate">生成文章</option>
               <option value="status">查看状态</option>
               <option value="init">初始化记忆</option>
             </select>
+            <span class="field-error"></span>
           </label>
-          <label>
+          <label class="field">
             文章类型
-            <select id="article-type" required>
+            <select id="article-type">
+              <option value="">请选择文章类型</option>
               <option value="long">长篇</option>
               <option value="short">短篇</option>
             </select>
+            <span class="field-error"></span>
           </label>
-          <label>
+          <label class="field">
             最小字数
-            <input id="min-words" type="number" min="100" max="50000" step="100" value="1800" required>
+            <input id="min-words" type="number" min="100" max="50000" step="100" placeholder="例如：500">
+            <span class="field-error"></span>
           </label>
-          <label>
+          <label class="field">
             最大字数
-            <input id="max-words" type="number" min="100" max="50000" step="100" value="2500" required>
+            <input id="max-words" type="number" min="100" max="50000" step="100" placeholder="例如：1000">
+            <span class="field-error"></span>
           </label>
-          <label class="wide">
+          <label class="field wide">
             描述
-            <textarea id="description" required placeholder="例如：写一个发生在雨夜便利店的悬疑短篇，结尾反转但要合情合理"></textarea>
+            <textarea id="description" placeholder="例如：写一个电梯里的中式恐怖小故事，结尾要解决核心问题"></textarea>
+            <span class="field-error"></span>
           </label>
-          <label class="wide">
+          <label class="field wide">
             风格
-            <input id="style" required placeholder="例如：冷静克制，场景细节扎实，结尾有余味">
+            <input id="style" placeholder="例如：中式恐怖、冷静克制、完整闭合">
+            <span class="field-error"></span>
           </label>
           <label class="toggle-row">
             <input id="de-ai" type="checkbox">
@@ -275,9 +298,10 @@
             <input id="send-email" type="checkbox">
             生成后发送 txt 到邮箱
           </label>
-          <label id="email-row" class="wide" style="display: none;">
+          <label id="email-row" class="field wide" style="display: none;">
             收件邮箱
             <input id="email-to" type="email" placeholder="name@example.com">
+            <span class="field-error"></span>
           </label>
         </div>
 
@@ -332,6 +356,15 @@
     const sendEmail = document.getElementById("send-email");
     const emailRow = document.getElementById("email-row");
 
+    const fields = {
+      article_type: document.getElementById("article-type"),
+      min_words: document.getElementById("min-words"),
+      max_words: document.getElementById("max-words"),
+      description: document.getElementById("description"),
+      style: document.getElementById("style"),
+      email_to: document.getElementById("email-to"),
+    };
+
     async function requestJson(url, options = {}) {
       const response = await fetch(url, {
         credentials: "same-origin",
@@ -381,27 +414,99 @@
       }
     }
 
+    function clearFieldErrors() {
+      Object.values(fields).forEach((field) => {
+        const wrapper = field.closest(".field");
+        const error = wrapper ? wrapper.querySelector(".field-error") : null;
+        if (wrapper) {
+          wrapper.classList.remove("invalid");
+        }
+        if (error) {
+          error.textContent = "";
+        }
+      });
+    }
+
+    function addFieldError(field, message) {
+      const wrapper = field.closest(".field");
+      const error = wrapper ? wrapper.querySelector(".field-error") : null;
+      if (wrapper) {
+        wrapper.classList.add("invalid");
+      }
+      if (error) {
+        error.textContent = message;
+      }
+    }
+
+    function focusFirstInvalid() {
+      const firstInvalid = document.querySelector(".field.invalid input, .field.invalid select, .field.invalid textarea");
+      if (!firstInvalid) {
+        return;
+      }
+      firstInvalid.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.setTimeout(() => firstInvalid.focus({ preventScroll: true }), 250);
+    }
+
     function validatePayload(payload) {
+      clearFieldErrors();
       if (payload.action !== "generate") {
-        return "";
+        return true;
+      }
+
+      if (!payload.article_type) {
+        addFieldError(fields.article_type, "请选择文章类型。");
+      }
+      if (!fields.min_words.value.trim()) {
+        addFieldError(fields.min_words, "请填写最小字数。");
+      }
+      if (!fields.max_words.value.trim()) {
+        addFieldError(fields.max_words, "请填写最大字数。");
+      }
+      if (fields.min_words.value.trim() && Number(fields.min_words.value) < 100) {
+        addFieldError(fields.min_words, "最小字数不能小于 100。");
+      }
+      if (fields.max_words.value.trim() && Number(fields.max_words.value) > 50000) {
+        addFieldError(fields.max_words, "最大字数不能超过 50000。");
+      }
+      if (fields.min_words.value.trim() && fields.max_words.value.trim() && payload.max_words < payload.min_words) {
+        addFieldError(fields.max_words, "最大字数不能小于最小字数。");
       }
       if (!payload.description.trim()) {
-        return "请填写描述。";
+        addFieldError(fields.description, "请填写描述。");
       }
       if (!payload.style.trim()) {
-        return "请填写风格。";
-      }
-      if (!payload.min_words || !payload.max_words) {
-        return "请填写最小字数和最大字数。";
-      }
-      if (payload.max_words < payload.min_words) {
-        return "最大字数不能小于最小字数。";
+        addFieldError(fields.style, "请填写风格。");
       }
       if (payload.send_email && !payload.email_to.trim()) {
-        return "请填写收件邮箱。";
+        addFieldError(fields.email_to, "请填写收件邮箱。");
       }
-      return "";
+      if (payload.send_email && payload.email_to.trim() && !fields.email_to.checkValidity()) {
+        addFieldError(fields.email_to, "请填写有效的邮箱地址。");
+      }
+
+      const hasError = Boolean(document.querySelector(".field.invalid"));
+      if (hasError) {
+        novelMessage.textContent = "请先填写标红的必填项。";
+        focusFirstInvalid();
+        return false;
+      }
+      return true;
     }
+
+    Object.values(fields).forEach((field) => {
+      field.addEventListener("input", () => {
+        const wrapper = field.closest(".field");
+        if (wrapper) {
+          wrapper.classList.remove("invalid");
+        }
+      });
+      field.addEventListener("change", () => {
+        const wrapper = field.closest(".field");
+        if (wrapper) {
+          wrapper.classList.remove("invalid");
+        }
+      });
+    });
 
     document.getElementById("login-form").addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -431,6 +536,11 @@
 
     sendEmail.addEventListener("change", () => {
       emailRow.style.display = sendEmail.checked ? "grid" : "none";
+      if (!sendEmail.checked) {
+        const wrapper = fields.email_to.closest(".field");
+        wrapper.classList.remove("invalid");
+        fields.email_to.value = "";
+      }
     });
 
     document.getElementById("run-novel").addEventListener("click", async () => {
@@ -442,18 +552,17 @@
 
       const payload = {
         action: document.getElementById("novel-action").value,
-        article_type: document.getElementById("article-type").value,
-        min_words: Number(document.getElementById("min-words").value),
-        max_words: Number(document.getElementById("max-words").value),
-        description: document.getElementById("description").value,
-        style: document.getElementById("style").value,
+        article_type: fields.article_type.value,
+        min_words: Number(fields.min_words.value),
+        max_words: Number(fields.max_words.value),
+        description: fields.description.value,
+        style: fields.style.value,
         de_ai: document.getElementById("de-ai").checked,
         send_email: sendEmail.checked,
-        email_to: document.getElementById("email-to").value,
+        email_to: fields.email_to.value,
       };
-      const error = validatePayload(payload);
-      if (error) {
-        novelMessage.textContent = error;
+
+      if (!validatePayload(payload)) {
         return;
       }
 
