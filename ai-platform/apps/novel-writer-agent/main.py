@@ -80,6 +80,10 @@ def save_json(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def word_range(min_words: int, max_words: int) -> str:
+    return f"{min_words}-{max_words} 字"
+
+
 def init_project() -> None:
     ensure_dirs()
     if not STATE_FILE.exists():
@@ -132,11 +136,10 @@ def research(input_path: str) -> None:
     if not source.exists():
         raise SystemExit(f"找不到调研输入文件：{source}")
 
-    content = source.read_text(encoding="utf-8")
     note = (
         "市场调研资料（用户手动整理的公开信息）\n"
         "禁止抓取或复制小说正文，只提炼抽象题材、标签、读者期待和节奏偏好。\n\n"
-        f"{content}\n"
+        f"{source.read_text(encoding='utf-8')}\n"
     )
     write_text(RESEARCH_FILE, note)
     print(f"调研资料已保存：{RESEARCH_FILE}")
@@ -155,8 +158,7 @@ def extract_patterns() -> None:
             "请从以下公开资料中提炼抽象创作共性，禁止复刻具体人物、桥段、台词、设定和世界观。\n\n"
             f"{notes[:8000]}"
         )
-        patterns = generate_text(prompt, words=900, purpose="patterns")
-        write_text(PATTERNS_FILE, patterns)
+        write_text(PATTERNS_FILE, generate_text(prompt, 600, 1000, False, "patterns"))
     print(f"抽象共性已保存：{PATTERNS_FILE}")
 
 
@@ -170,8 +172,7 @@ def build_project(genre: str, style: str) -> None:
         f"风格：{style or '未指定'}\n参考抽象共性：{patterns[:4000]}\n"
         "要求：只写原创设定，不抄袭具体作品。"
     )
-    premise = generate_text(prompt, words=900, purpose="build")
-    memory["premise"] = premise
+    memory["premise"] = generate_text(prompt, 700, 1000, False, "build")
     memory.setdefault("characters", [])
     memory.setdefault("world_rules", [])
     memory.setdefault("open_threads", [])
@@ -182,7 +183,7 @@ def build_project(genre: str, style: str) -> None:
     print("长篇项目记忆已建立。")
 
 
-def call_deepseek(prompt: str, words: int) -> str:
+def call_deepseek(prompt: str, max_words: int) -> str:
     api_key = os.getenv("DEEPSEEK_API_KEY", "")
     model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
     base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/")
@@ -198,13 +199,13 @@ def call_deepseek(prompt: str, words: int) -> str:
                 {
                     "role": "system",
                     "content": (
-                        "你是一个原创小说写作助手。只创作原创内容，禁止抄袭具体人物、桥段、台词、设定和世界观。"
+                        "你是一个原创写作助手。只创作原创内容，禁止抄袭具体人物、桥段、台词、设定和世界观。"
                     ),
                 },
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0.8,
-            "max_tokens": max(1000, min(words * 2, 8000)),
+            "max_tokens": max(1000, min(max_words * 2, 8000)),
         },
         timeout=120,
     )
@@ -213,20 +214,23 @@ def call_deepseek(prompt: str, words: int) -> str:
     return data["choices"][0]["message"]["content"].strip()
 
 
-def mock_text(prompt: str, words: int, purpose: str) -> str:
+def mock_text(prompt: str, min_words: int, max_words: int, de_ai: bool, purpose: str) -> str:
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    de_ai_note = "已要求降低 AI 腔，优先使用具体动作、场景细节和自然句式。" if de_ai else "未启用去 AI 味。"
     if purpose == "short":
         return (
             "标题：雨夜便利店\n\n"
-            "凌晨两点，便利店的玻璃门被风推开，铃声响得像一枚掉进水里的硬币。\n\n"
-            "值班的林澈抬头，看见一个浑身湿透的男人站在货架尽头。他没有买伞，只问这里有没有十年前下架的薄荷糖。"
-            "林澈说没有，男人却笑了笑，准确说出收银台下面那只旧铁盒的位置。\n\n"
-            "铁盒里有一张泛黄小票，日期正是十年前的今晚。小票背面写着林澈自己的名字，以及一句话："
-            "不要让第三个顾客离开。\n\n"
-            "门铃第二次响起时，一个女孩走进来买热牛奶。第三次响起时，林澈终于明白，那个湿透的男人并不是顾客，"
-            "而是十年后仍没能走出这家店的自己。\n\n"
+            "凌晨两点，便利店门口的雨水漫过台阶。林澈刚把热柜里的包子重新摆好，门铃就响了。\n\n"
+            "进来的男人没有收伞。他站在收银台前，问这里还有没有十年前那种薄荷糖。林澈说早停产了。"
+            "男人却指了指柜台下面，说最后一盒被店长锁在铁盒里，钥匙压在验钞机底下。\n\n"
+            "林澈笑不出来了。验钞机底下真的有钥匙。铁盒里有一张小票，日期是十年前的今晚，"
+            "背面写着一句话：第三个顾客走出门，你就会想起来。\n\n"
+            "门铃第二次响起，一个女孩买走了热牛奶。第三次响起前，那个湿透的男人看着林澈，"
+            "像看着一面终于愿意照人的镜子。\n\n"
+            "林澈这才发现，小票上的签名不是店长，是他自己。\n\n"
             "【备注】这是本地 mock 输出，用于验证流程，不消耗 DeepSeek Token。\n"
-            f"【生成时间】{timestamp}\n【目标】{prompt[:300]}\n"
+            f"【生成时间】{timestamp}\n【字数范围】{word_range(min_words, max_words)}\n【去 AI】{de_ai_note}\n"
+            f"【目标】{prompt[:500]}\n"
         )
     if purpose == "patterns":
         return (
@@ -243,21 +247,22 @@ def mock_text(prompt: str, words: int, purpose: str) -> str:
         )
     return (
         "标题：异常委托\n\n"
-        "第一段钟声响起时，主角收到一份没有发件人的委托。它要求他在午夜前找到一个不存在的地址，"
+        "钟声响起时，主角收到一份没有发件人的委托。它要求他在午夜前找到一个不存在的地址，"
         "否则昨天已经发生过的事故会再次发生。\n\n"
         "他起初以为这是恶作剧，直到手机里出现一段十分钟后才会拍下的视频。视频中的他站在雨里，"
         "手中握着一枚陌生钥匙，身后有人轻声叫出了他的真名。\n\n"
         "【备注】这是本地 mock 输出，用于验证流程，不消耗 DeepSeek Token。\n"
-        f"【生成时间】{timestamp}\n【目标】{prompt[:300]}\n"
+        f"【生成时间】{timestamp}\n【字数范围】{word_range(min_words, max_words)}\n【去 AI】{de_ai_note}\n"
+        f"【目标】{prompt[:500]}\n"
     )
 
 
-def generate_text(prompt: str, words: int, purpose: str) -> str:
+def generate_text(prompt: str, min_words: int, max_words: int, de_ai: bool, purpose: str) -> str:
     load_env()
     mock_enabled = os.getenv("NOVEL_AGENT_MOCK", "true").lower() != "false"
     if mock_enabled:
-        return mock_text(prompt, words, purpose)
-    return call_deepseek(prompt, words)
+        return mock_text(prompt, min_words, max_words, de_ai, purpose)
+    return call_deepseek(prompt, max_words)
 
 
 def split_notes(content: str) -> tuple[str, str]:
@@ -274,7 +279,16 @@ def title_from_content(content: str, fallback: str) -> str:
     return safe_filename(first_line, fallback)
 
 
-def write_chapter(goal: str, genre: str, style: str, words: int, is_next: bool) -> None:
+def de_ai_instruction(de_ai: bool) -> str:
+    if not de_ai:
+        return "不需要额外去 AI 味处理。"
+    return (
+        "请降低 AI 腔：减少空泛总结和套路化转折，多用具体动作、感官细节、人物选择和自然短句；"
+        "避免过度整齐的排比、模板化段落和说教式结尾。"
+    )
+
+
+def write_chapter(goal: str, genre: str, style: str, min_words: int, max_words: int, de_ai: bool, is_next: bool) -> None:
     ensure_dirs()
     state = load_json(STATE_FILE, {"chapter_count": 0})
     memory = load_json(LONG_MEMORY_FILE, {})
@@ -283,25 +297,28 @@ def write_chapter(goal: str, genre: str, style: str, words: int, is_next: bool) 
         f"请写长篇小说第 {chapter_number:03d} 章。\n"
         f"题材：{genre or state.get('genre') or '未指定'}\n"
         f"风格：{style or state.get('style') or '未指定'}\n"
-        f"用户目标：{goal}\n"
+        f"字数范围：{word_range(min_words, max_words)}\n"
+        f"用户描述：{goal}\n"
+        f"{de_ai_instruction(de_ai)}\n"
         f"长篇记忆：{json.dumps(memory, ensure_ascii=False)[:5000]}\n"
         "要求：只生成本章，不一次性生成整本；保持原创。"
     )
-    content = generate_text(prompt, words, purpose="chapter")
+    content = generate_text(prompt, min_words, max_words, de_ai, purpose="chapter")
     clean, with_notes = split_notes(content)
     title = title_from_content(content, f"第{chapter_number:03d}章")
     filename = f"第{chapter_number:03d}章_{title}.txt"
     write_text(CHAPTERS_CLEAN_DIR / filename, clean)
     write_text(CHAPTERS_WITH_NOTES_DIR / filename, with_notes)
 
-    summary = {
-        "chapter": chapter_number,
-        "goal": goal,
-        "title": title,
-        "created_at": datetime.now().isoformat(timespec="seconds"),
-        "summary": clean[:300],
-    }
-    memory.setdefault("chapter_summaries", []).append(summary)
+    memory.setdefault("chapter_summaries", []).append(
+        {
+            "chapter": chapter_number,
+            "goal": goal,
+            "title": title,
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+            "summary": clean[:300],
+        }
+    )
     state.update(
         {
             "chapter_count": chapter_number,
@@ -316,14 +333,16 @@ def write_chapter(goal: str, genre: str, style: str, words: int, is_next: bool) 
     print(f"模式：{'next' if is_next else 'write'}")
 
 
-def write_short(goal: str, genre: str, style: str, words: int) -> None:
+def write_short(goal: str, genre: str, style: str, min_words: int, max_words: int, de_ai: bool) -> None:
     ensure_dirs()
     prompt = (
         "请写一个独立短篇，不更新长篇记忆。\n"
-        f"题材：{genre or '未指定'}\n风格：{style or '未指定'}\n字数目标：{words}\n用户目标：{goal}\n"
+        f"题材：{genre or '未指定'}\n风格：{style or '未指定'}\n"
+        f"字数范围：{word_range(min_words, max_words)}\n用户描述：{goal}\n"
+        f"{de_ai_instruction(de_ai)}\n"
         "要求：原创，结尾有余味，禁止抄袭具体作品。"
     )
-    content = generate_text(prompt, words, purpose="short")
+    content = generate_text(prompt, min_words, max_words, de_ai, purpose="short")
     clean, with_notes = split_notes(content)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     title = title_from_content(content, "独立短篇")
@@ -331,6 +350,14 @@ def write_short(goal: str, genre: str, style: str, words: int) -> None:
     write_text(SHORT_CLEAN_DIR / filename, clean)
     write_text(SHORT_WITH_NOTES_DIR / filename, with_notes)
     print(f"短篇已生成：{filename}")
+
+
+def normalize_word_args(args: argparse.Namespace) -> tuple[int, int]:
+    max_words = args.max_words or args.words or 2500
+    min_words = args.min_words or max(100, int(max_words * 0.8))
+    if min_words > max_words:
+        raise SystemExit("最小字数不能大于最大字数。")
+    return min_words, max_words
 
 
 def parse_args() -> argparse.Namespace:
@@ -354,7 +381,10 @@ def parse_args() -> argparse.Namespace:
         action_parser.add_argument("--goal", default="")
         action_parser.add_argument("--genre", default="")
         action_parser.add_argument("--style", default="")
-        action_parser.add_argument("--words", type=int, default=2500)
+        action_parser.add_argument("--words", type=int, default=None)
+        action_parser.add_argument("--min-words", type=int, default=None)
+        action_parser.add_argument("--max-words", type=int, default=None)
+        action_parser.add_argument("--de-ai", action="store_true")
 
     return parser.parse_args()
 
@@ -372,18 +402,22 @@ def main() -> int:
         extract_patterns()
     elif args.command == "build":
         build_project(args.genre, args.style)
-    elif args.command == "write":
+    elif args.command in {"write", "next", "short"}:
         if not args.goal:
-            raise SystemExit("write 需要 --goal。")
-        write_chapter(args.goal, args.genre, args.style, args.words, is_next=False)
-    elif args.command == "next":
-        if not args.goal:
-            raise SystemExit("next 需要 --goal。")
-        write_chapter(args.goal, args.genre, args.style, args.words, is_next=True)
-    elif args.command == "short":
-        if not args.goal:
-            raise SystemExit("short 需要 --goal。")
-        write_short(args.goal, args.genre, args.style, args.words)
+            raise SystemExit(f"{args.command} 需要 --goal。")
+        min_words, max_words = normalize_word_args(args)
+        if args.command == "short":
+            write_short(args.goal, args.genre, args.style, min_words, max_words, args.de_ai)
+        else:
+            write_chapter(
+                args.goal,
+                args.genre,
+                args.style,
+                min_words,
+                max_words,
+                args.de_ai,
+                is_next=args.command == "next",
+            )
     return 0
 
 

@@ -52,9 +52,18 @@ NOVEL_AGENT_MOCK=true
 APP_SECRET_KEY=change_this_secret
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=change_this_password
+
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USERNAME=your_email_username
+SMTP_PASSWORD=your_email_password_or_app_password
+SMTP_FROM=your_email@example.com
+SMTP_USE_TLS=true
 ```
 
 开发阶段建议保留 `NOVEL_AGENT_MOCK=true`，这样 Agent 会生成本地测试文本，不消耗 DeepSeek Token。需要真实调用 DeepSeek 时，填写真实 Key，并设置 `NOVEL_AGENT_MOCK=false`。
+
+如果需要“生成后发送 txt 到邮箱”，请配置 SMTP。常见邮箱需要使用“应用专用密码”，不要直接填写网页登录密码。
 
 ## Docker 启动方式
 
@@ -157,6 +166,7 @@ python main.py write --goal "写开篇，主角卷入第一起异常事件，结
 python main.py next --goal "承接上一章，推进调查并让主角付出代价"
 python main.py short --goal "写一个发生在雨夜便利店的悬疑短篇，结尾反转但要合情合理"
 python main.py short --genre "都市奇谈" --style "冷静克制，结尾有余味" --words 3000 --goal "一名夜班司机接到来自十年前的订单"
+python main.py short --min-words 1800 --max-words 2500 --de-ai --style "冷静克制，结尾有余味" --goal "一名夜班司机接到来自十年前的订单"
 ```
 
 输出目录：
