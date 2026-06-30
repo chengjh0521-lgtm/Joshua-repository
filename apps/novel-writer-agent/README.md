@@ -19,6 +19,7 @@ python main.py build --genre "悬疑爽文" --style "番茄爆款节奏"
 python main.py write --goal "写开篇，主角卷入第一起异常事件，结尾留下强悬念"
 python main.py next --goal "承接上一章，推进调查并让主角付出代价"
 python main.py short --goal "写一个发生在雨夜便利店的悬疑短篇，结尾反转但要合情合理"
+python main.py short --min-words 1800 --max-words 2500 --de-ai --style "冷静克制，结尾有余味" --goal "一名夜班司机接到来自十年前的订单"
 ```
 
 ## 输出目录

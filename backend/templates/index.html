@@ -20,9 +20,7 @@
       --shadow: 0 12px 32px rgba(31, 41, 51, 0.08);
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
@@ -33,13 +31,16 @@
 
     header {
       border-bottom: 1px solid var(--line);
-      background: #ffffff;
+      background: #fff;
     }
 
-    .topbar {
+    .topbar, main {
       max-width: 1180px;
       margin: 0 auto;
       padding: 22px 20px;
+    }
+
+    .topbar {
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -47,36 +48,15 @@
       flex-wrap: wrap;
     }
 
-    h1 {
-      margin: 0;
-      font-size: 28px;
-      line-height: 1.2;
-    }
+    main { padding-top: 24px; padding-bottom: 44px; }
+    h1 { margin: 0; font-size: 28px; line-height: 1.2; }
+    h2 { margin: 0 0 10px; font-size: 20px; }
+    h3 { margin: 0 0 10px; font-size: 17px; }
 
-    .status {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--muted);
-      font-size: 14px;
-    }
-
-    .dot {
-      width: 9px;
-      height: 9px;
-      border-radius: 50%;
-      background: var(--danger);
-    }
-
-    .dot.ok {
-      background: var(--ok);
-    }
-
-    main {
-      max-width: 1180px;
-      margin: 0 auto;
-      padding: 24px 20px 44px;
-    }
+    .muted { color: var(--muted); line-height: 1.6; }
+    .status { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--danger); }
+    .dot.ok { background: var(--ok); }
 
     .auth-row {
       display: grid;
@@ -93,23 +73,10 @@
       align-items: end;
     }
 
-    label {
-      display: grid;
-      gap: 6px;
-      color: var(--muted);
-      font-size: 13px;
-    }
+    label { display: grid; gap: 6px; color: var(--muted); font-size: 13px; }
+    input, select, textarea, button { font: inherit; }
 
-    input,
-    select,
-    textarea,
-    button {
-      font: inherit;
-    }
-
-    input,
-    select,
-    textarea {
+    input, select, textarea {
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -119,14 +86,8 @@
       outline: none;
     }
 
-    textarea {
-      min-height: 96px;
-      resize: vertical;
-    }
-
-    input:focus,
-    select:focus,
-    textarea:focus {
+    textarea { min-height: 130px; resize: vertical; }
+    input:focus, select:focus, textarea:focus {
       border-color: var(--primary);
       box-shadow: 0 0 0 3px rgba(20, 108, 99, 0.14);
     }
@@ -141,18 +102,9 @@
       min-height: 41px;
     }
 
-    button:hover {
-      background: var(--primary-dark);
-    }
-
-    button.secondary {
-      background: #e8edf2;
-      color: var(--text);
-    }
-
-    button.secondary:hover {
-      background: #dbe3eb;
-    }
+    button:hover { background: var(--primary-dark); }
+    button.secondary { background: #e8edf2; color: var(--text); }
+    button.secondary:hover { background: #dbe3eb; }
 
     .grid {
       display: grid;
@@ -161,32 +113,13 @@
       align-items: start;
     }
 
-    .side-grid {
-      display: grid;
-      gap: 14px;
-    }
-
+    .side-grid { display: grid; gap: 14px; }
     .card {
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 8px;
       box-shadow: var(--shadow);
       padding: 18px;
-    }
-
-    .card h2,
-    .card h3 {
-      margin: 0 0 10px;
-      font-size: 20px;
-    }
-
-    .card h3 {
-      font-size: 17px;
-    }
-
-    .muted {
-      color: var(--muted);
-      line-height: 1.6;
     }
 
     .form-grid {
@@ -196,8 +129,20 @@
       margin: 14px 0;
     }
 
-    .wide {
-      grid-column: 1 / -1;
+    .wide { grid-column: 1 / -1; }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 42px;
+      color: var(--text);
+    }
+
+    .toggle-row input {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 auto;
     }
 
     .result {
@@ -223,24 +168,9 @@
       line-height: 1.55;
     }
 
-    .preview pre {
-      background: #fff;
-      color: var(--text);
-    }
-
-    .message {
-      min-height: 24px;
-      margin-top: 8px;
-      color: var(--accent);
-      font-size: 14px;
-    }
-
-    .file-list {
-      margin-top: 10px;
-      display: grid;
-      gap: 8px;
-    }
-
+    .preview pre { background: #fff; color: var(--text); }
+    .message { min-height: 24px; margin-top: 8px; color: var(--accent); font-size: 14px; }
+    .file-list { margin-top: 10px; display: grid; gap: 8px; }
     .file-link {
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -263,20 +193,8 @@
     }
 
     @media (max-width: 900px) {
-      .auth-row,
-      .grid,
-      .result {
-        grid-template-columns: 1fr;
-      }
-
-      .login-form,
-      .form-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .wide {
-        grid-column: auto;
-      }
+      .auth-row, .grid, .result, .login-form, .form-grid { grid-template-columns: 1fr; }
+      .wide { grid-column: auto; }
     }
   </style>
 </head>
@@ -315,34 +233,51 @@
       <article class="card">
         <span class="badge">已接入</span>
         <h2>小说 Agent</h2>
-        <p class="muted">支持状态查看、初始化、生成短篇、写新章节、承接下一章。执行前必须登录。</p>
+        <p class="muted">生成内容会保存为 txt。执行生成、查看文件和邮件发送都需要登录。</p>
 
         <div class="form-grid">
           <label>
-            操作类型
+            工具操作
             <select id="novel-action">
-              <option value="status">status</option>
-              <option value="init">init</option>
-              <option value="short">short</option>
-              <option value="write">write</option>
-              <option value="next">next</option>
+              <option value="generate">生成文章</option>
+              <option value="status">查看状态</option>
+              <option value="init">初始化记忆</option>
             </select>
           </label>
           <label>
-            words
-            <input id="novel-words" type="number" min="300" max="20000" step="100" placeholder="2500">
+            文章类型
+            <select id="article-type" required>
+              <option value="long">长篇</option>
+              <option value="short">短篇</option>
+            </select>
+          </label>
+          <label>
+            最小字数
+            <input id="min-words" type="number" min="100" max="50000" step="100" value="1800" required>
+          </label>
+          <label>
+            最大字数
+            <input id="max-words" type="number" min="100" max="50000" step="100" value="2500" required>
           </label>
           <label class="wide">
-            goal
-            <textarea id="novel-goal" placeholder="写一个发生在雨夜便利店的悬疑短篇，结尾反转但要合情合理"></textarea>
+            描述
+            <textarea id="description" required placeholder="例如：写一个发生在雨夜便利店的悬疑短篇，结尾反转但要合情合理"></textarea>
           </label>
-          <label>
-            genre
-            <input id="novel-genre" placeholder="悬疑爽文">
+          <label class="wide">
+            风格
+            <input id="style" required placeholder="例如：冷静克制，场景细节扎实，结尾有余味">
           </label>
-          <label>
-            style
-            <input id="novel-style" placeholder="冷静克制，结尾有余味">
+          <label class="toggle-row">
+            <input id="de-ai" type="checkbox">
+            去 AI 味
+          </label>
+          <label class="toggle-row">
+            <input id="send-email" type="checkbox">
+            生成后发送 txt 到邮箱
+          </label>
+          <label id="email-row" class="wide" style="display: none;">
+            收件邮箱
+            <input id="email-to" type="email" placeholder="name@example.com">
           </label>
         </div>
 
@@ -394,6 +329,8 @@
     const resultBox = document.getElementById("run-result");
     const latestPreview = document.getElementById("latest-preview");
     const fileList = document.getElementById("file-list");
+    const sendEmail = document.getElementById("send-email");
+    const emailRow = document.getElementById("email-row");
 
     async function requestJson(url, options = {}) {
       const response = await fetch(url, {
@@ -444,6 +381,28 @@
       }
     }
 
+    function validatePayload(payload) {
+      if (payload.action !== "generate") {
+        return "";
+      }
+      if (!payload.description.trim()) {
+        return "请填写描述。";
+      }
+      if (!payload.style.trim()) {
+        return "请填写风格。";
+      }
+      if (!payload.min_words || !payload.max_words) {
+        return "请填写最小字数和最大字数。";
+      }
+      if (payload.max_words < payload.min_words) {
+        return "最大字数不能小于最小字数。";
+      }
+      if (payload.send_email && !payload.email_to.trim()) {
+        return "请填写收件邮箱。";
+      }
+      return "";
+    }
+
     document.getElementById("login-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       authMessage.textContent = "";
@@ -470,6 +429,10 @@
       authMessage.textContent = "已退出登录。";
     });
 
+    sendEmail.addEventListener("change", () => {
+      emailRow.style.display = sendEmail.checked ? "grid" : "none";
+    });
+
     document.getElementById("run-novel").addEventListener("click", async () => {
       novelMessage.textContent = "";
       if (!state.authenticated) {
@@ -477,18 +440,25 @@
         return;
       }
 
-      resultBox.textContent = "执行中...";
-      latestPreview.textContent = "等待输出...";
-      const words = document.getElementById("novel-words").value;
       const payload = {
         action: document.getElementById("novel-action").value,
-        goal: document.getElementById("novel-goal").value,
-        genre: document.getElementById("novel-genre").value,
-        style: document.getElementById("novel-style").value,
+        article_type: document.getElementById("article-type").value,
+        min_words: Number(document.getElementById("min-words").value),
+        max_words: Number(document.getElementById("max-words").value),
+        description: document.getElementById("description").value,
+        style: document.getElementById("style").value,
+        de_ai: document.getElementById("de-ai").checked,
+        send_email: sendEmail.checked,
+        email_to: document.getElementById("email-to").value,
       };
-      if (words) {
-        payload.words = Number(words);
+      const error = validatePayload(payload);
+      if (error) {
+        novelMessage.textContent = error;
+        return;
       }
+
+      resultBox.textContent = "执行中...";
+      latestPreview.textContent = "等待输出...";
 
       try {
         const data = await requestJson("/api/novel/run", {
@@ -497,13 +467,14 @@
         });
         resultBox.textContent = [
           `returncode: ${data.returncode}`,
+          data.email && data.email.requested ? `email: ${data.email.message}` : "",
           "",
           "stdout:",
           data.stdout || "(empty)",
           "",
           "stderr:",
           data.stderr || "(empty)",
-        ].join("\n");
+        ].filter(Boolean).join("\n");
         latestPreview.textContent = data.latest_file
           ? `${data.latest_file.relative_path}\n\n${data.latest_file.preview}`
           : "暂无输出。";

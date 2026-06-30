@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from starlette.middleware.sessions import SessionMiddleware
 
 from backend.services import auth_service
+from backend.services.email_service import EmailConfigError, EmailSendError, send_generated_file_email
 from backend.services.file_service import get_output_file, list_output_files
 from backend.services.novel_service import NovelActionError, run_novel_agent
 
@@ -18,7 +19,7 @@ AGENT_ROOT = PROJECT_ROOT / "apps" / "novel-writer-agent"
 
 load_dotenv(PROJECT_ROOT / ".env")
 
-app = FastAPI(title="AI 创作平台", version="0.1.0")
+app = FastAPI(title="AI 创作平台", version="0.2.0")
 app.add_middleware(
     SessionMiddleware,
     secret_key=os.getenv("APP_SECRET_KEY", "change_this_secret"),
@@ -35,10 +36,19 @@ class LoginPayload(BaseModel):
 
 
 class NovelRunPayload(BaseModel):
-    action: str
+    action: str = "generate"
+    article_type: str | None = None
+    min_words: int | None = None
+    max_words: int | None = None
+    description: str | None = None
+    style: str | None = None
+    de_ai: bool = False
+    send_email: bool = False
+    email_to: str | None = None
+
+    # Backward-compatible fields kept for the first MVP API shape.
     goal: str | None = None
     genre: str | None = None
-    style: str | None = None
     words: int | None = None
 
 
@@ -70,10 +80,32 @@ async def me(request: Request):
 @app.post("/api/novel/run")
 async def novel_run(request: Request, payload: NovelRunPayload):
     auth_service.require_login(request)
+    data = payload.model_dump()
     try:
-        result = run_novel_agent(AGENT_ROOT, payload.model_dump())
+        result = run_novel_agent(AGENT_ROOT, data)
     except NovelActionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    result["email"] = {"requested": payload.send_email, "sent": False, "message": ""}
+    if payload.send_email and result.get("returncode") == 0 and result.get("latest_file"):
+        try:
+            send_generated_file_email(
+                agent_root=AGENT_ROOT,
+                relative_path=result["latest_file"]["relative_path"],
+                to_address=payload.email_to or "",
+            )
+            result["email"] = {
+                "requested": True,
+                "sent": True,
+                "message": f"已发送到 {payload.email_to}",
+            }
+        except (EmailConfigError, EmailSendError, FileNotFoundError) as exc:
+            result["email"] = {
+                "requested": True,
+                "sent": False,
+                "message": f"邮件未发送：{exc}",
+            }
+
     return JSONResponse(result)
 
 
