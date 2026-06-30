@@ -9,6 +9,9 @@ dist/
 build/
 .DS_Store
 
+backend/data/accounts.json
+backend/data/accounts.json.tmp
+
 apps/novel-writer-agent/output/**
 !apps/novel-writer-agent/output/
 !apps/novel-writer-agent/output/**/

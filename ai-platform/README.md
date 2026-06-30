@@ -252,3 +252,24 @@ SMTP_USE_TLS=true
 ```
 
 同时确认 `SMTP_PASSWORD` 使用的是邮箱授权码或应用专用密码，不是网页登录密码。
+
+### JSON 账户和试用额度
+
+当前 MVP 使用 `backend/data/accounts.json` 保存可登录账户和体验额度。首次启动时，如果该文件不存在，系统会从 `backend/data/accounts.seed.json` 自动生成。
+
+内置试用账号：
+
+```text
+用户名：test01
+密码：test01
+额度：5 次成功生成
+```
+
+额度规则：
+
+- `generate`、`short`、`write`、`next` 这类会消耗 Token 的操作会检查额度。
+- 只有生成成功，才扣 1 次。
+- `status`、`init` 不扣次数。
+- 管理员账号 `quota_limit` 为 `null`，不限制次数。
+
+真实运行文件 `backend/data/accounts.json` 已被 `.gitignore` 忽略，避免服务器扣次数后影响 `git pull`。后续可以把这层替换成数据库。
