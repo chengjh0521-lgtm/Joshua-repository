@@ -293,4 +293,14 @@ SMTP_USE_TLS=true
 - `check-once`：执行一轮 YouTube 监管、下载和可选发布
 - `upload-pending`：执行已有待发布任务
 
-注意：B站/抖音发布依赖 Playwright 浏览器；Docker 构建会安装 Chromium，首次构建会比较慢。
+注意：B站/抖音发布依赖 Playwright 浏览器。默认 Docker 构建不会安装 Chromium，以免服务器网络、系统源或磁盘问题阻塞网站部署。只需要查看网页、生成小说、检查配置或下载流程时，直接运行：
+
+```bash
+docker compose build --no-cache
+```
+
+若要在容器内执行 B站/抖音发布，再使用：
+
+```bash
+docker compose build --no-cache --build-arg INSTALL_PLAYWRIGHT_BROWSERS=true
+```
