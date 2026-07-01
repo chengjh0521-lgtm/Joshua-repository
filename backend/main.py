@@ -19,6 +19,9 @@ from backend.services.video_agent_service import (
     complete_bilibili_login,
     run_video_agent,
     start_bilibili_login,
+    start_video_monitor,
+    stop_video_monitor,
+    video_monitor_status,
 )
 from backend.services.zhihu_agent_service import ZhihuAgentError, get_zhihu_output_file, run_zhihu_agent
 
@@ -199,6 +202,28 @@ async def video_run(request: Request, payload: VideoRunPayload):
     except VideoAgentError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return JSONResponse(result)
+
+
+@app.post("/api/video/service/start")
+async def video_service_start(request: Request):
+    username = auth_service.require_login(request)
+    try:
+        result = start_video_monitor(PROJECT_ROOT, username)
+    except VideoAgentError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return JSONResponse(result)
+
+
+@app.post("/api/video/service/stop")
+async def video_service_stop(request: Request):
+    username = auth_service.require_login(request)
+    return JSONResponse(stop_video_monitor(username))
+
+
+@app.get("/api/video/service/status")
+async def video_service_status(request: Request):
+    username = auth_service.require_login(request)
+    return JSONResponse(video_monitor_status(username))
 
 
 @app.get("/api/video/channels")

@@ -173,6 +173,16 @@ def bilibili_login_files(username: str) -> dict:
     }
 
 
+def video_service_files(username: str) -> dict:
+    root = user_root(username) / "video_runtime" / "service"
+    root.mkdir(parents=True, exist_ok=True)
+    return {
+        "pid_file": root / "monitor.pid",
+        "stop_file": root / "monitor.stop",
+        "log_file": root / "monitor.log",
+    }
+
+
 async def save_upload(username: str, key: str, upload: UploadFile) -> dict:
     allowed = {
         "bilibili_state": ("bilibili_state_file", "bilibili_state.json"),

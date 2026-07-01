@@ -586,7 +586,9 @@
           </div>
 
           <div class="inline-actions">
-            <button id="run-video" type="button">启动视频 Agent</button>
+            <button id="start-video-service" type="button">启动持续监控</button>
+            <button id="stop-video-service" class="secondary" type="button">终止监控</button>
+            <button id="refresh-video-service" class="secondary" type="button">刷新服务状态</button>
             <button id="open-config-from-video" class="secondary" type="button">打开账户配置</button>
           </div>
           <div id="video-message" class="message"></div>
@@ -881,6 +883,7 @@
           videoConfigStatus.textContent = error.message;
         });
         refreshVideoChannels();
+        refreshVideoServiceStatus();
       }
       if (agent === "novel" && state.authenticated) {
         refreshFiles();
@@ -907,7 +910,7 @@
       const user = await requestJson("/api/auth/me");
       renderAuth(user);
       if (state.authenticated) {
-        await Promise.all([refreshFiles(), refreshConfig(), refreshVideoChannels()]);
+        await Promise.all([refreshFiles(), refreshConfig(), refreshVideoChannels(), refreshVideoServiceStatus()]);
       }
     }
 
@@ -1020,6 +1023,32 @@
       }
     }
 
+    function renderVideoServiceStatus(data) {
+      const lines = [
+        `running: ${Boolean(data.running)}`,
+        data.pid ? `pid: ${data.pid}` : "",
+        data.message ? `message: ${data.message}` : "",
+        "",
+        "log:",
+        data.log_tail || "(empty)",
+      ].filter((line) => line !== "");
+      videoResult.textContent = lines.join("\n");
+      videoMessage.textContent = data.running ? "视频持续监控服务正在运行。" : "视频持续监控服务未运行。";
+    }
+
+    async function refreshVideoServiceStatus() {
+      if (!state.authenticated) {
+        videoResult.textContent = "登录后可查看服务状态。";
+        return;
+      }
+      try {
+        const data = await requestJson("/api/video/service/status");
+        renderVideoServiceStatus(data);
+      } catch (error) {
+        videoResult.textContent = error.message;
+      }
+    }
+
     function clearFieldErrors() {
       [...Object.values(fields), ...Object.values(videoFields), ...Object.values(zhihuFields), ...Object.values(channelFields)].forEach((field) => {
         const wrapper = field.closest(".field");
@@ -1090,13 +1119,6 @@
         return false;
       }
       return true;
-    }
-
-    function videoRunAction() {
-      if (videoFields.service_type.value === "monitor_notify" || videoFields.service_type.value === "monitor_notify_download_publish") {
-        return "check-once";
-      }
-      return "status";
     }
 
     function validateVideoConfig() {
@@ -1214,7 +1236,7 @@
         });
         renderAuth(data);
         authMessage.textContent = "登录成功。";
-        await Promise.all([refreshFiles(), refreshConfig(), refreshVideoChannels()]);
+        await Promise.all([refreshFiles(), refreshConfig(), refreshVideoChannels(), refreshVideoServiceStatus()]);
       } catch (error) {
         authMessage.textContent = error.message;
       }
@@ -1387,7 +1409,7 @@
       }
     });
 
-    document.getElementById("run-video").addEventListener("click", async () => {
+    document.getElementById("start-video-service").addEventListener("click", async () => {
       videoMessage.textContent = "";
       if (!state.authenticated) {
         videoMessage.textContent = "请先登录后再使用该功能。";
@@ -1395,10 +1417,10 @@
         return;
       }
       if (!validateVideoConfig()) return;
-      videoResult.textContent = "执行中...";
+      videoResult.textContent = "正在启动持续监控服务...";
       try {
         await saveVideoConfig();
-        if (videoRunAction() === "check-once" && state.config && !(state.config.youtube_channels || []).length) {
+        if (state.config && !(state.config.youtube_channels || []).length) {
           videoResult.textContent = "等待添加监测频道。";
           videoMessage.textContent = "当前账户暂无监测频道，请先添加监测池。";
           openChannelModal();
@@ -1410,24 +1432,31 @@
           renderBilibiliGate(state.config);
           return;
         }
-        const data = await requestJson("/api/video/run", {
-          method: "POST",
-          body: JSON.stringify({ action: videoRunAction() }),
-        });
-        videoResult.textContent = [
-          `returncode: ${data.returncode}`,
-          "",
-          "stdout:",
-          data.stdout || "(empty)",
-          "",
-          "stderr:",
-          data.stderr || "(empty)",
-        ].join("\n");
+        const data = await requestJson("/api/video/service/start", { method: "POST", body: "{}" });
+        renderVideoServiceStatus(data);
         await refreshConfig();
       } catch (error) {
         videoResult.textContent = error.message;
       }
     });
+
+    document.getElementById("stop-video-service").addEventListener("click", async () => {
+      videoMessage.textContent = "";
+      if (!state.authenticated) {
+        videoMessage.textContent = "请先登录后再使用该功能。";
+        openAccountPanel();
+        return;
+      }
+      videoResult.textContent = "正在终止持续监控服务...";
+      try {
+        const data = await requestJson("/api/video/service/stop", { method: "POST", body: "{}" });
+        renderVideoServiceStatus(data);
+      } catch (error) {
+        videoResult.textContent = error.message;
+      }
+    });
+
+    document.getElementById("refresh-video-service").addEventListener("click", refreshVideoServiceStatus);
 
     document.getElementById("run-zhihu").addEventListener("click", async () => {
       zhihuMessage.textContent = "";
