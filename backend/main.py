@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from urllib.parse import quote
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
@@ -19,7 +20,7 @@ from backend.services.video_agent_service import (
     run_video_agent,
     start_bilibili_login,
 )
-from backend.services.zhihu_agent_service import ZhihuAgentError, run_zhihu_agent
+from backend.services.zhihu_agent_service import ZhihuAgentError, get_zhihu_output_file, run_zhihu_agent
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -36,6 +37,13 @@ app.add_middleware(
 )
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+
+
+def attachment_headers(name: str) -> dict[str, str]:
+    return {
+        "X-File-Name": name,
+        "Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}",
+    }
 
 
 class LoginPayload(BaseModel):
@@ -214,6 +222,17 @@ async def zhihu_run(request: Request, payload: ZhihuRunPayload):
     return JSONResponse(result)
 
 
+@app.get("/api/zhihu/files/{file_id}")
+async def zhihu_file(request: Request, file_id: str, download: bool = False):
+    auth_service.require_login(request)
+    try:
+        name, content = get_zhihu_output_file(PROJECT_ROOT, file_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    headers = attachment_headers(name) if download else {"X-File-Name": name}
+    return PlainTextResponse(content, media_type="text/plain; charset=utf-8", headers=headers)
+
+
 @app.get("/api/novel/files")
 async def novel_files(request: Request):
     auth_service.require_login(request)
@@ -230,14 +249,11 @@ async def novel_files(request: Request):
 
 
 @app.get("/api/novel/files/{file_id}")
-async def novel_file(request: Request, file_id: str):
+async def novel_file(request: Request, file_id: str, download: bool = False):
     auth_service.require_login(request)
     try:
         item, content = get_output_file(AGENT_ROOT, file_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return PlainTextResponse(
-        content,
-        media_type="text/plain; charset=utf-8",
-        headers={"X-File-Name": item.name},
-    )
+    headers = attachment_headers(item.name) if download else {"X-File-Name": item.name}
+    return PlainTextResponse(content, media_type="text/plain; charset=utf-8", headers=headers)
