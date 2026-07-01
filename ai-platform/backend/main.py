@@ -13,7 +13,7 @@ from backend.services import auth_service
 from backend.services.email_service import EmailConfigError, EmailSendError, send_generated_file_email
 from backend.services.file_service import get_output_file, list_output_files
 from backend.services.novel_service import NovelActionError, run_novel_agent
-from backend.services.user_config_service import public_config, save_upload, update_config
+from backend.services.user_config_service import add_video_channel, list_video_channels, public_config, save_upload, update_config
 from backend.services.video_agent_service import (
     VideoAgentError,
     complete_bilibili_login,
@@ -80,6 +80,11 @@ class UserConfigPayload(BaseModel):
 
 class VideoRunPayload(BaseModel):
     action: str = "status"
+
+
+class VideoChannelPayload(BaseModel):
+    name: str
+    url: str
 
 
 class ZhihuRunPayload(BaseModel):
@@ -194,6 +199,21 @@ async def video_run(request: Request, payload: VideoRunPayload):
     except VideoAgentError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return JSONResponse(result)
+
+
+@app.get("/api/video/channels")
+async def video_channels(request: Request):
+    username = auth_service.require_login(request)
+    return list_video_channels(username)
+
+
+@app.post("/api/video/channels")
+async def add_video_channel_route(request: Request, payload: VideoChannelPayload):
+    username = auth_service.require_login(request)
+    try:
+        return add_video_channel(username, payload.name, payload.url)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/video/bilibili-login/start")

@@ -49,7 +49,7 @@ _runtime_dir = _path(_runtime.get("runtime_dir"), BASE_DIR / "runtime")
 _runtime_dir.mkdir(parents=True, exist_ok=True)
 
 CONFIG = {
-    "youtube_channels": _runtime.get("youtube_channels") or DEFAULT_CHANNELS,
+    "youtube_channels": _runtime["youtube_channels"] if "youtube_channels" in _runtime else DEFAULT_CHANNELS,
     "email_notify_enabled": bool(_runtime.get("email_notify_enabled", False)),
     "deno_path": _runtime.get("deno_path", "/root/.deno/bin/deno"),
     "email_smtp_host": _runtime.get("email_smtp_host", os.getenv("SMTP_HOST", "")),

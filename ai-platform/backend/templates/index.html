@@ -564,15 +564,14 @@
               </select>
               <span class="field-error"></span>
             </label>
-            <label class="field">
-              启动动作
-              <select id="video-action">
-                <option value="status">检查配置状态</option>
-                <option value="check-once">单轮监管下载发布</option>
-                <option value="upload-pending">执行待发布任务</option>
-              </select>
-              <span class="field-error"></span>
-            </label>
+          </div>
+
+          <div class="panel-section">
+            <div class="inline-actions">
+              <button id="open-channel-modal" class="secondary" type="button">添加监测频道</button>
+              <button id="refresh-video-channels" class="secondary" type="button">查询监测频道</button>
+            </div>
+            <div id="video-channel-list" class="file-list muted">登录后可查询当前账户的监测频道。</div>
           </div>
 
           <div id="bilibili-login-gate" class="panel-section stack" style="display: none;">
@@ -724,6 +723,29 @@
     </aside>
   </div>
 
+  <div id="channel-modal-backdrop" class="panel-backdrop">
+    <aside class="account-panel" aria-label="添加监测频道">
+      <div class="panel-head">
+        <h2>添加监测频道</h2>
+        <button id="close-channel-modal" class="secondary" type="button">关闭</button>
+      </div>
+      <div class="stack">
+        <label class="field">
+          频道名称
+          <input id="channel-name" placeholder="例如：小黑爱跳舞">
+          <span class="field-error"></span>
+        </label>
+        <label class="field">
+          频道链接
+          <input id="channel-url" placeholder="https://www.youtube.com/@channel/videos">
+          <span class="field-error"></span>
+        </label>
+        <button id="save-channel" type="button">保存到监测池</button>
+        <div id="channel-message" class="message"></div>
+      </div>
+    </aside>
+  </div>
+
   <script>
     const state = { authenticated: false, user: null, selectedAgent: null, config: null };
     const accountButton = document.getElementById("account-button");
@@ -742,6 +764,9 @@
     const videoMessage = document.getElementById("video-message");
     const videoResult = document.getElementById("video-result");
     const videoConfigStatus = document.getElementById("video-config-status");
+    const videoChannelList = document.getElementById("video-channel-list");
+    const channelModalBackdrop = document.getElementById("channel-modal-backdrop");
+    const channelMessage = document.getElementById("channel-message");
     const bilibiliLoginGate = document.getElementById("bilibili-login-gate");
     const bilibiliLoginMessage = document.getElementById("bilibili-login-message");
     const bilibiliLoginActions = document.getElementById("bilibili-login-actions");
@@ -766,6 +791,11 @@
       service_type: document.getElementById("video-service-type"),
       notify_mode: document.getElementById("video-notify-mode"),
       publish_mode: document.getElementById("video-publish-mode"),
+    };
+
+    const channelFields = {
+      name: document.getElementById("channel-name"),
+      url: document.getElementById("channel-url"),
     };
 
     const zhihuFields = {
@@ -823,6 +853,16 @@
       link.remove();
     }
 
+    function openChannelModal() {
+      channelMessage.textContent = "";
+      channelModalBackdrop.classList.add("open");
+      window.setTimeout(() => channelFields.name.focus(), 80);
+    }
+
+    function closeChannelModal() {
+      channelModalBackdrop.classList.remove("open");
+    }
+
     function selectAgent(agent) {
       state.selectedAgent = agent;
       document.querySelectorAll(".agent-item").forEach((item) => {
@@ -840,6 +880,7 @@
         refreshConfig().catch((error) => {
           videoConfigStatus.textContent = error.message;
         });
+        refreshVideoChannels();
       }
       if (agent === "novel" && state.authenticated) {
         refreshFiles();
@@ -866,7 +907,7 @@
       const user = await requestJson("/api/auth/me");
       renderAuth(user);
       if (state.authenticated) {
-        await Promise.all([refreshFiles(), refreshConfig()]);
+        await Promise.all([refreshFiles(), refreshConfig(), refreshVideoChannels()]);
       }
     }
 
@@ -942,8 +983,45 @@
       return config;
     }
 
+    function renderVideoChannels(channels) {
+      if (!channels || !channels.length) {
+        videoChannelList.textContent = "当前账户暂无监测频道。";
+        return;
+      }
+      videoChannelList.innerHTML = "";
+      channels.forEach((channel) => {
+        const item = document.createElement("div");
+        item.className = "file-link";
+        const title = document.createElement("strong");
+        title.textContent = `${channel.channel_no || ""} ${channel.name || "未命名频道"}`;
+        const url = document.createElement("div");
+        url.className = "muted";
+        url.textContent = channel.url || "";
+        const statusRow = document.createElement("div");
+        const status = document.createElement("span");
+        status.className = `status-pill ${channel.enabled ? "ok" : ""}`;
+        status.textContent = channel.enabled ? "启用" : "停用";
+        statusRow.appendChild(status);
+        item.append(title, url, statusRow);
+        videoChannelList.appendChild(item);
+      });
+    }
+
+    async function refreshVideoChannels() {
+      if (!state.authenticated) {
+        videoChannelList.textContent = "登录后可查询当前账户的监测频道。";
+        return;
+      }
+      try {
+        const channels = await requestJson("/api/video/channels");
+        renderVideoChannels(channels);
+      } catch (error) {
+        videoChannelList.textContent = error.message;
+      }
+    }
+
     function clearFieldErrors() {
-      [...Object.values(fields), ...Object.values(videoFields), ...Object.values(zhihuFields)].forEach((field) => {
+      [...Object.values(fields), ...Object.values(videoFields), ...Object.values(zhihuFields), ...Object.values(channelFields)].forEach((field) => {
         const wrapper = field.closest(".field");
         const error = wrapper ? wrapper.querySelector(".field-error") : null;
         if (wrapper) wrapper.classList.remove("invalid");
@@ -999,6 +1077,28 @@
       return true;
     }
 
+    function validateChannelForm() {
+      clearFieldErrors();
+      if (!channelFields.name.value.trim()) addFieldError(channelFields.name, "请填写频道名称。");
+      if (!channelFields.url.value.trim()) addFieldError(channelFields.url, "请填写频道链接。");
+      if (channelFields.url.value.trim() && !channelFields.url.value.trim().startsWith("https://")) {
+        addFieldError(channelFields.url, "请填写 https 开头的 YouTube 频道链接。");
+      }
+      if (document.querySelector(".field.invalid")) {
+        channelMessage.textContent = "请先填写标红的必填项。";
+        focusFirstInvalid();
+        return false;
+      }
+      return true;
+    }
+
+    function videoRunAction() {
+      if (videoFields.service_type.value === "monitor_notify" || videoFields.service_type.value === "monitor_notify_download_publish") {
+        return "check-once";
+      }
+      return "status";
+    }
+
     function validateVideoConfig() {
       clearFieldErrors();
       if (!videoFields.service_type.value) addFieldError(videoFields.service_type, "请选择服务类型。");
@@ -1010,6 +1110,11 @@
       if (document.querySelector(".field.invalid")) {
         videoMessage.textContent = "请先填写视频 Agent 的必选项。";
         focusFirstInvalid();
+        return false;
+      }
+      if (videoFields.service_type.value === "add_pool") {
+        videoMessage.textContent = "添加监测池请在弹窗中保存频道，不需要启动 Agent。";
+        openChannelModal();
         return false;
       }
       if (videoFields.publish_mode.value === "bilibili" && state.config && !state.config.has_bilibili_state) {
@@ -1035,7 +1140,7 @@
       return config;
     }
 
-    [...Object.values(fields), ...Object.values(videoFields), ...Object.values(zhihuFields)].forEach((field) => {
+    [...Object.values(fields), ...Object.values(videoFields), ...Object.values(zhihuFields), ...Object.values(channelFields)].forEach((field) => {
       field.addEventListener("input", () => field.closest(".field")?.classList.remove("invalid"));
       field.addEventListener("change", () => field.closest(".field")?.classList.remove("invalid"));
     });
@@ -1043,6 +1148,7 @@
     Object.values(videoFields).forEach((field) => {
       field.addEventListener("change", () => {
         if (field === videoFields.publish_mode) renderBilibiliGate(state.config);
+        if (field === videoFields.service_type && field.value === "add_pool") openChannelModal();
       });
     });
 
@@ -1061,6 +1167,39 @@
     accountBackdrop.addEventListener("click", (event) => {
       if (event.target === accountBackdrop) accountBackdrop.classList.remove("open");
     });
+    document.getElementById("open-channel-modal").addEventListener("click", openChannelModal);
+    document.getElementById("close-channel-modal").addEventListener("click", closeChannelModal);
+    channelModalBackdrop.addEventListener("click", (event) => {
+      if (event.target === channelModalBackdrop) closeChannelModal();
+    });
+    document.getElementById("refresh-video-channels").addEventListener("click", refreshVideoChannels);
+
+    document.getElementById("save-channel").addEventListener("click", async () => {
+      channelMessage.textContent = "";
+      if (!state.authenticated) {
+        channelMessage.textContent = "请先登录后再添加监测频道。";
+        return;
+      }
+      if (!validateChannelForm()) return;
+      try {
+        const config = await requestJson("/api/video/channels", {
+          method: "POST",
+          body: JSON.stringify({
+            name: channelFields.name.value,
+            url: channelFields.url.value,
+          }),
+        });
+        state.config = config;
+        channelMessage.textContent = "监测频道已添加。";
+        channelFields.name.value = "";
+        channelFields.url.value = "";
+        renderVideoChannels(config.youtube_channels || []);
+        await refreshConfig();
+        window.setTimeout(closeChannelModal, 500);
+      } catch (error) {
+        channelMessage.textContent = error.message;
+      }
+    });
 
     document.getElementById("login-form").addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -1075,7 +1214,7 @@
         });
         renderAuth(data);
         authMessage.textContent = "登录成功。";
-        await Promise.all([refreshFiles(), refreshConfig()]);
+        await Promise.all([refreshFiles(), refreshConfig(), refreshVideoChannels()]);
       } catch (error) {
         authMessage.textContent = error.message;
       }
@@ -1086,6 +1225,7 @@
       renderAuth({ authenticated: false, username: null });
       fileList.textContent = "登录后显示。";
       videoConfigStatus.textContent = "登录后读取配置。";
+      videoChannelList.textContent = "登录后可查询当前账户的监测频道。";
       authMessage.textContent = "已退出登录。";
     });
 
@@ -1258,6 +1398,12 @@
       videoResult.textContent = "执行中...";
       try {
         await saveVideoConfig();
+        if (videoRunAction() === "check-once" && state.config && !(state.config.youtube_channels || []).length) {
+          videoResult.textContent = "等待添加监测频道。";
+          videoMessage.textContent = "当前账户暂无监测频道，请先添加监测池。";
+          openChannelModal();
+          return;
+        }
         if (videoFields.publish_mode.value === "bilibili" && state.config && !state.config.has_bilibili_state) {
           videoResult.textContent = "等待 B 站登录态。";
           videoMessage.textContent = "发布到 B 站前，请先添加 B 站登录态文件。";
@@ -1266,7 +1412,7 @@
         }
         const data = await requestJson("/api/video/run", {
           method: "POST",
-          body: JSON.stringify({ action: document.getElementById("video-action").value }),
+          body: JSON.stringify({ action: videoRunAction() }),
         });
         videoResult.textContent = [
           `returncode: ${data.returncode}`,
