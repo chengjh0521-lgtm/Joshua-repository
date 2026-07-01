@@ -6,9 +6,8 @@
   <title>AI 创作平台</title>
   <style>
     :root {
-      color-scheme: light;
       --bg: #f6f7f9;
-      --panel: #ffffff;
+      --panel: #fff;
       --text: #1f2933;
       --muted: #637083;
       --line: #d9e0e8;
@@ -21,195 +20,85 @@
     }
 
     * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-    }
-
-    header {
-      border-bottom: 1px solid var(--line);
-      background: #fff;
-    }
-
-    .topbar, main {
-      max-width: 1180px;
-      margin: 0 auto;
-      padding: 22px 20px;
-    }
-
-    .topbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
-
+    body { margin: 0; font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif; background: var(--bg); color: var(--text); }
+    header { border-bottom: 1px solid var(--line); background: #fff; position: sticky; top: 0; z-index: 10; }
+    .topbar, main { max-width: 1180px; margin: 0 auto; padding: 18px 20px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
     main { padding-top: 24px; padding-bottom: 44px; }
     h1 { margin: 0; font-size: 28px; line-height: 1.2; }
     h2 { margin: 0 0 10px; font-size: 20px; }
     h3 { margin: 0 0 10px; font-size: 17px; }
-
     .muted { color: var(--muted); line-height: 1.6; }
-    .status { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
-    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--danger); }
-    .dot.ok { background: var(--ok); }
 
-    .auth-row {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: 12px;
-      align-items: end;
-      margin-bottom: 20px;
-    }
-
-    .login-form {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(180px, 240px)) auto;
-      gap: 10px;
-      align-items: end;
-    }
-
-    label { display: grid; gap: 6px; color: var(--muted); font-size: 13px; }
-    input, select, textarea, button { font: inherit; }
-
-    input, select, textarea {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 10px 11px;
-      color: var(--text);
-      background: #fff;
-      outline: none;
-    }
-
-    textarea { min-height: 130px; resize: vertical; }
-    input:focus, select:focus, textarea:focus {
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(20, 108, 99, 0.14);
-    }
-
-    .field.invalid input,
-    .field.invalid select,
-    .field.invalid textarea {
-      border-color: var(--danger);
-      box-shadow: 0 0 0 3px rgba(180, 35, 24, 0.13);
-    }
-
-    .field-error {
-      display: none;
-      color: var(--danger);
-      font-size: 12px;
-      line-height: 1.4;
-    }
-
-    .field.invalid .field-error { display: block; }
-
-    button {
-      border: 0;
-      border-radius: 8px;
-      padding: 10px 14px;
-      background: var(--primary);
-      color: #fff;
-      cursor: pointer;
-      min-height: 41px;
-    }
-
+    button { border: 0; border-radius: 8px; padding: 10px 14px; background: var(--primary); color: #fff; cursor: pointer; min-height: 41px; font: inherit; }
     button:hover { background: var(--primary-dark); }
     button.secondary { background: #e8edf2; color: var(--text); }
     button.secondary:hover { background: #dbe3eb; }
 
-    .grid {
-      display: grid;
-      grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
-      gap: 18px;
-      align-items: start;
-    }
-
-    .side-grid { display: grid; gap: 14px; }
-    .card {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      box-shadow: var(--shadow);
-      padding: 18px;
-    }
-
-    .form-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
-      margin: 14px 0;
-    }
-
-    .wide { grid-column: 1 / -1; }
-
-    .toggle-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      min-height: 42px;
-      color: var(--text);
-    }
-
-    .toggle-row input {
-      width: 18px;
-      height: 18px;
-      flex: 0 0 auto;
-    }
-
-    .result {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: 12px;
-      margin-top: 14px;
-    }
-
-    pre {
-      margin: 0;
-      min-height: 180px;
-      max-height: 360px;
-      overflow: auto;
-      white-space: pre-wrap;
-      word-break: break-word;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 12px;
-      background: #111827;
-      color: #e5e7eb;
-      font-size: 13px;
-      line-height: 1.55;
-    }
-
-    .preview pre { background: #fff; color: var(--text); }
-    .message { min-height: 24px; margin-top: 8px; color: var(--accent); font-size: 14px; }
-    .file-list { margin-top: 10px; display: grid; gap: 8px; }
-    .file-link {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 9px 10px;
-      background: #fbfcfd;
-      color: var(--text);
-      text-decoration: none;
-      overflow-wrap: anywhere;
-    }
-
-    .badge {
-      display: inline-flex;
-      width: fit-content;
+    .account-button {
+      width: 44px;
+      height: 44px;
       border-radius: 999px;
-      padding: 4px 9px;
-      background: #eef6f4;
-      color: var(--primary);
-      font-size: 12px;
-      margin-bottom: 8px;
+      padding: 0;
+      display: inline-grid;
+      place-items: center;
+      font-weight: 700;
+      background: #e8edf2;
+      color: var(--text);
+      border: 2px solid var(--line);
     }
+    .account-button.authed { background: #e8f6f3; border-color: var(--primary); color: var(--primary); }
+
+    .panel-backdrop {
+      position: fixed;
+      inset: 0;
+      display: none;
+      background: rgba(15, 23, 42, 0.34);
+      z-index: 20;
+      justify-content: flex-end;
+    }
+    .panel-backdrop.open { display: flex; }
+    .account-panel {
+      width: min(420px, 100%);
+      height: 100%;
+      background: #fff;
+      box-shadow: -14px 0 40px rgba(15, 23, 42, 0.18);
+      padding: 20px;
+      overflow: auto;
+    }
+    .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+    .panel-section { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
+
+    label { display: grid; gap: 6px; color: var(--muted); font-size: 13px; }
+    input, select, textarea { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 10px 11px; color: var(--text); background: #fff; outline: none; font: inherit; }
+    textarea { min-height: 130px; resize: vertical; }
+    input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(20, 108, 99, 0.14); }
+    .field.invalid input, .field.invalid select, .field.invalid textarea { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(180, 35, 24, 0.13); }
+    .field-error { display: none; color: var(--danger); font-size: 12px; line-height: 1.4; }
+    .field.invalid .field-error { display: block; }
+
+    .stack { display: grid; gap: 12px; }
+    .inline-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .message { min-height: 24px; margin-top: 8px; color: var(--accent); font-size: 14px; }
+
+    .grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 18px; align-items: start; }
+    .side-grid { display: grid; gap: 14px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: 18px; }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
+    .wide { grid-column: 1 / -1; }
+    .toggle-row { display: flex; align-items: center; gap: 10px; min-height: 42px; color: var(--text); }
+    .toggle-row input { width: 18px; height: 18px; flex: 0 0 auto; }
+    .result { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin-top: 14px; }
+    pre { margin: 0; min-height: 180px; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-word; border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: #111827; color: #e5e7eb; font-size: 13px; line-height: 1.55; }
+    .preview pre { background: #fff; color: var(--text); }
+    .file-list { margin-top: 10px; display: grid; gap: 8px; }
+    .file-link { border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; background: #fbfcfd; color: var(--text); text-decoration: none; overflow-wrap: anywhere; }
+    .badge { display: inline-flex; width: fit-content; border-radius: 999px; padding: 4px 9px; background: #eef6f4; color: var(--primary); font-size: 12px; margin-bottom: 8px; }
+    .status-pill { display: inline-flex; border-radius: 999px; padding: 4px 8px; background: #f1f5f9; color: var(--muted); font-size: 12px; }
+    .status-pill.ok { background: #e8f6f3; color: var(--ok); }
 
     @media (max-width: 900px) {
-      .auth-row, .grid, .result, .login-form, .form-grid { grid-template-columns: 1fr; }
+      .grid, .result, .form-grid { grid-template-columns: 1fr; }
       .wide { grid-column: auto; }
     }
   </style>
@@ -219,32 +108,83 @@
     <div class="topbar">
       <div>
         <h1>AI 创作平台</h1>
-        <div class="muted">本地开发、服务器部署的创作 Agent MVP</div>
+        <div class="muted">小说创作与视频自动监管发布</div>
       </div>
-      <div class="status">
-        <span id="status-dot" class="dot"></span>
-        <span id="login-status">正在读取登录状态...</span>
-      </div>
+      <button id="account-button" class="account-button" type="button" title="账户">?</button>
     </div>
   </header>
 
-  <main>
-    <section class="auth-row">
-      <form id="login-form" class="login-form">
-        <label>
-          用户名
-          <input id="username" autocomplete="username" value="admin">
-        </label>
-        <label>
-          密码
-          <input id="password" type="password" autocomplete="current-password">
-        </label>
-        <button type="submit">登录</button>
-      </form>
-      <button id="logout-button" class="secondary" type="button">退出登录</button>
-    </section>
-    <div id="auth-message" class="message"></div>
+  <div id="account-backdrop" class="panel-backdrop">
+    <aside class="account-panel" aria-label="账户面板">
+      <div class="panel-head">
+        <h2>账户</h2>
+        <button id="close-account" class="secondary" type="button">关闭</button>
+      </div>
+      <div id="account-status" class="muted">正在读取登录状态...</div>
 
+      <section id="login-section" class="panel-section">
+        <form id="login-form" class="stack">
+          <label>
+            用户名
+            <input id="username" autocomplete="username" value="admin">
+          </label>
+          <label>
+            密码
+            <input id="password" type="password" autocomplete="current-password">
+          </label>
+          <button type="submit">登录</button>
+        </form>
+      </section>
+
+      <section id="config-section" class="panel-section stack" style="display: none;">
+        <div class="inline-actions">
+          <button id="logout-button" class="secondary" type="button">退出登录</button>
+          <button id="refresh-config" class="secondary" type="button">刷新配置</button>
+        </div>
+
+        <label>
+          邮件收件箱
+          <input id="config-email" type="email" placeholder="name@example.com">
+        </label>
+        <div class="inline-actions">
+          <label class="toggle-row">
+            <input id="config-auto-publish" type="checkbox">
+            下载后自动发布
+          </label>
+          <label class="toggle-row">
+            <input id="config-bilibili" type="checkbox">
+            发布到 B站
+          </label>
+          <label class="toggle-row">
+            <input id="config-douyin" type="checkbox">
+            发布到抖音
+          </label>
+        </div>
+        <button id="save-config" type="button">保存关键配置</button>
+
+        <div class="panel-section stack">
+          <h3>登录态与 Cookie</h3>
+          <label>
+            B站登录态 JSON
+            <input id="file-bilibili" type="file" accept=".json,application/json">
+          </label>
+          <label>
+            抖音登录态 JSON
+            <input id="file-douyin" type="file" accept=".json,application/json">
+          </label>
+          <label>
+            YouTube cookies.txt
+            <input id="file-youtube-cookie" type="file" accept=".txt,text/plain">
+          </label>
+          <button id="upload-config-files" type="button">上传文件</button>
+          <div id="config-file-status" class="muted"></div>
+        </div>
+      </section>
+      <div id="auth-message" class="message"></div>
+    </aside>
+  </div>
+
+  <main>
     <section class="grid">
       <article class="card">
         <span class="badge">已接入</span>
@@ -322,18 +262,26 @@
 
       <aside class="side-grid">
         <article class="card">
+          <span class="badge">新接入</span>
+          <h3>视频监管发布 Agent</h3>
+          <p class="muted">对接 Project_09：监管 YouTube、下载视频、写入发布任务，并可按配置发布到 B站/抖音。</p>
+          <label>
+            操作
+            <select id="video-action">
+              <option value="status">检查配置状态</option>
+              <option value="check-once">单轮监管下载发布</option>
+              <option value="upload-pending">执行待发布任务</option>
+            </select>
+          </label>
+          <div class="inline-actions" style="margin-top: 12px;">
+            <button id="run-video" type="button">执行视频 Agent</button>
+          </div>
+          <div id="video-message" class="message"></div>
+          <pre id="video-result">等待执行...</pre>
+        </article>
+        <article class="card">
           <span class="badge">后续接入</span>
           <h3>知乎写作 Agent</h3>
-          <p class="muted">登录后可使用，第一版先保留入口。</p>
-        </article>
-        <article class="card">
-          <span class="badge">后续接入</span>
-          <h3>数学文章 Agent</h3>
-          <p class="muted">登录后可使用，第一版先保留入口。</p>
-        </article>
-        <article class="card">
-          <span class="badge">后续接入</span>
-          <h3>金融文章 Agent</h3>
           <p class="muted">登录后可使用，第一版先保留入口。</p>
         </article>
         <article class="card">
@@ -345,9 +293,12 @@
   </main>
 
   <script>
-    const state = { authenticated: false };
-    const loginStatus = document.getElementById("login-status");
-    const statusDot = document.getElementById("status-dot");
+    const state = { authenticated: false, user: null };
+    const accountButton = document.getElementById("account-button");
+    const accountBackdrop = document.getElementById("account-backdrop");
+    const accountStatus = document.getElementById("account-status");
+    const loginSection = document.getElementById("login-section");
+    const configSection = document.getElementById("config-section");
     const authMessage = document.getElementById("auth-message");
     const novelMessage = document.getElementById("novel-message");
     const resultBox = document.getElementById("run-result");
@@ -355,6 +306,8 @@
     const fileList = document.getElementById("file-list");
     const sendEmail = document.getElementById("send-email");
     const emailRow = document.getElementById("email-row");
+    const videoMessage = document.getElementById("video-message");
+    const videoResult = document.getElementById("video-result");
 
     const fields = {
       article_type: document.getElementById("article-type"),
@@ -366,9 +319,10 @@
     };
 
     async function requestJson(url, options = {}) {
+      const headers = options.body instanceof FormData ? {} : { "Content-Type": "application/json" };
       const response = await fetch(url, {
         credentials: "same-origin",
-        headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+        headers: { ...headers, ...(options.headers || {}) },
         ...options,
       });
       const text = await response.text();
@@ -379,23 +333,27 @@
       return data;
     }
 
+    function quotaText(user) {
+      if (!user || !user.authenticated) return "未登录";
+      if (user.quota_limit === null || user.quota_limit === undefined) return `${user.username} · 无限额`;
+      return `${user.username} · 剩余 ${user.quota_remaining}/${user.quota_limit} 次`;
+    }
+
     function renderAuth(user) {
       state.authenticated = Boolean(user.authenticated);
-      if (!state.authenticated) {
-        loginStatus.textContent = "未登录";
-      } else if (user.quota_limit === null || user.quota_limit === undefined) {
-        loginStatus.textContent = `已登录：${user.username}（无限额）`;
-      } else {
-        loginStatus.textContent = `已登录：${user.username}（剩余 ${user.quota_remaining}/${user.quota_limit} 次）`;
-      }
-      statusDot.classList.toggle("ok", state.authenticated);
+      state.user = user;
+      accountStatus.textContent = quotaText(user);
+      accountButton.textContent = state.authenticated ? String(user.username || "U").slice(0, 1).toUpperCase() : "?";
+      accountButton.classList.toggle("authed", state.authenticated);
+      loginSection.style.display = state.authenticated ? "none" : "block";
+      configSection.style.display = state.authenticated ? "grid" : "none";
     }
 
     async function refreshMe() {
       const user = await requestJson("/api/auth/me");
       renderAuth(user);
       if (state.authenticated) {
-        await refreshFiles();
+        await Promise.all([refreshFiles(), refreshConfig()]);
       }
     }
 
@@ -420,78 +378,56 @@
       }
     }
 
+    async function refreshConfig() {
+      const config = await requestJson("/api/user/config");
+      document.getElementById("config-email").value = config.email_receiver || "";
+      document.getElementById("config-auto-publish").checked = Boolean(config.auto_publish);
+      document.getElementById("config-bilibili").checked = Boolean(config.auto_publish_bilibili);
+      document.getElementById("config-douyin").checked = Boolean(config.auto_publish_douyin);
+      document.getElementById("config-file-status").innerHTML = [
+        `<span class="status-pill ${config.has_youtube_cookie ? "ok" : ""}">YouTube Cookie：${config.has_youtube_cookie ? "已上传" : "未上传"}</span>`,
+        `<span class="status-pill ${config.has_bilibili_state ? "ok" : ""}">B站登录态：${config.has_bilibili_state ? "已上传" : "未上传"}</span>`,
+        `<span class="status-pill ${config.has_douyin_state ? "ok" : ""}">抖音登录态：${config.has_douyin_state ? "已上传" : "未上传"}</span>`,
+      ].join(" ");
+    }
+
     function clearFieldErrors() {
       Object.values(fields).forEach((field) => {
         const wrapper = field.closest(".field");
         const error = wrapper ? wrapper.querySelector(".field-error") : null;
-        if (wrapper) {
-          wrapper.classList.remove("invalid");
-        }
-        if (error) {
-          error.textContent = "";
-        }
+        if (wrapper) wrapper.classList.remove("invalid");
+        if (error) error.textContent = "";
       });
     }
 
     function addFieldError(field, message) {
       const wrapper = field.closest(".field");
       const error = wrapper ? wrapper.querySelector(".field-error") : null;
-      if (wrapper) {
-        wrapper.classList.add("invalid");
-      }
-      if (error) {
-        error.textContent = message;
-      }
+      if (wrapper) wrapper.classList.add("invalid");
+      if (error) error.textContent = message;
     }
 
     function focusFirstInvalid() {
       const firstInvalid = document.querySelector(".field.invalid input, .field.invalid select, .field.invalid textarea");
-      if (!firstInvalid) {
-        return;
-      }
+      if (!firstInvalid) return;
       firstInvalid.scrollIntoView({ behavior: "smooth", block: "center" });
       window.setTimeout(() => firstInvalid.focus({ preventScroll: true }), 250);
     }
 
-    function validatePayload(payload) {
+    function validateNovel(payload) {
       clearFieldErrors();
-      if (payload.action !== "generate") {
-        return true;
-      }
-
-      if (!payload.article_type) {
-        addFieldError(fields.article_type, "请选择文章类型。");
-      }
-      if (!fields.min_words.value.trim()) {
-        addFieldError(fields.min_words, "请填写最小字数。");
-      }
-      if (!fields.max_words.value.trim()) {
-        addFieldError(fields.max_words, "请填写最大字数。");
-      }
-      if (fields.min_words.value.trim() && Number(fields.min_words.value) < 100) {
-        addFieldError(fields.min_words, "最小字数不能小于 100。");
-      }
-      if (fields.max_words.value.trim() && Number(fields.max_words.value) > 50000) {
-        addFieldError(fields.max_words, "最大字数不能超过 50000。");
-      }
-      if (fields.min_words.value.trim() && fields.max_words.value.trim() && payload.max_words < payload.min_words) {
-        addFieldError(fields.max_words, "最大字数不能小于最小字数。");
-      }
-      if (!payload.description.trim()) {
-        addFieldError(fields.description, "请填写描述。");
-      }
-      if (!payload.style.trim()) {
-        addFieldError(fields.style, "请填写风格。");
-      }
-      if (payload.send_email && !payload.email_to.trim()) {
-        addFieldError(fields.email_to, "请填写收件邮箱。");
-      }
-      if (payload.send_email && payload.email_to.trim() && !fields.email_to.checkValidity()) {
-        addFieldError(fields.email_to, "请填写有效的邮箱地址。");
-      }
-
-      const hasError = Boolean(document.querySelector(".field.invalid"));
-      if (hasError) {
+      if (payload.action !== "generate") return true;
+      if (!payload.article_type) addFieldError(fields.article_type, "请选择文章类型。");
+      if (!fields.min_words.value.trim()) addFieldError(fields.min_words, "请填写最小字数。");
+      if (!fields.max_words.value.trim()) addFieldError(fields.max_words, "请填写最大字数。");
+      if (fields.min_words.value.trim() && Number(fields.min_words.value) < 100) addFieldError(fields.min_words, "最小字数不能小于 100。");
+      if (fields.max_words.value.trim() && Number(fields.max_words.value) > 50000) addFieldError(fields.max_words, "最大字数不能超过 50000。");
+      if (fields.min_words.value.trim() && fields.max_words.value.trim() && payload.max_words < payload.min_words) addFieldError(fields.max_words, "最大字数不能小于最小字数。");
+      if (!payload.description.trim()) addFieldError(fields.description, "请填写描述。");
+      if (!payload.style.trim()) addFieldError(fields.style, "请填写风格。");
+      if (payload.send_email && !payload.email_to.trim()) addFieldError(fields.email_to, "请填写收件邮箱。");
+      if (payload.send_email && payload.email_to.trim() && !fields.email_to.checkValidity()) addFieldError(fields.email_to, "请填写有效的邮箱地址。");
+      if (document.querySelector(".field.invalid")) {
         novelMessage.textContent = "请先填写标红的必填项。";
         focusFirstInvalid();
         return false;
@@ -500,18 +436,14 @@
     }
 
     Object.values(fields).forEach((field) => {
-      field.addEventListener("input", () => {
-        const wrapper = field.closest(".field");
-        if (wrapper) {
-          wrapper.classList.remove("invalid");
-        }
-      });
-      field.addEventListener("change", () => {
-        const wrapper = field.closest(".field");
-        if (wrapper) {
-          wrapper.classList.remove("invalid");
-        }
-      });
+      field.addEventListener("input", () => field.closest(".field")?.classList.remove("invalid"));
+      field.addEventListener("change", () => field.closest(".field")?.classList.remove("invalid"));
+    });
+
+    accountButton.addEventListener("click", () => accountBackdrop.classList.add("open"));
+    document.getElementById("close-account").addEventListener("click", () => accountBackdrop.classList.remove("open"));
+    accountBackdrop.addEventListener("click", (event) => {
+      if (event.target === accountBackdrop) accountBackdrop.classList.remove("open");
     });
 
     document.getElementById("login-form").addEventListener("submit", async (event) => {
@@ -527,7 +459,7 @@
         });
         renderAuth(data);
         authMessage.textContent = "登录成功。";
-        await refreshFiles();
+        await Promise.all([refreshFiles(), refreshConfig()]);
       } catch (error) {
         authMessage.textContent = error.message;
       }
@@ -540,11 +472,52 @@
       authMessage.textContent = "已退出登录。";
     });
 
+    document.getElementById("refresh-config").addEventListener("click", refreshConfig);
+    document.getElementById("save-config").addEventListener("click", async () => {
+      authMessage.textContent = "";
+      try {
+        await requestJson("/api/user/config", {
+          method: "POST",
+          body: JSON.stringify({
+            email_receiver: document.getElementById("config-email").value,
+            auto_publish: document.getElementById("config-auto-publish").checked,
+            auto_publish_bilibili: document.getElementById("config-bilibili").checked,
+            auto_publish_douyin: document.getElementById("config-douyin").checked,
+          }),
+        });
+        authMessage.textContent = "配置已保存。";
+        await refreshConfig();
+      } catch (error) {
+        authMessage.textContent = error.message;
+      }
+    });
+
+    document.getElementById("upload-config-files").addEventListener("click", async () => {
+      authMessage.textContent = "";
+      const form = new FormData();
+      const bilibili = document.getElementById("file-bilibili").files[0];
+      const douyin = document.getElementById("file-douyin").files[0];
+      const cookie = document.getElementById("file-youtube-cookie").files[0];
+      if (bilibili) form.append("bilibili_state", bilibili);
+      if (douyin) form.append("douyin_state", douyin);
+      if (cookie) form.append("youtube_cookie", cookie);
+      if (![...form.keys()].length) {
+        authMessage.textContent = "请选择至少一个文件。";
+        return;
+      }
+      try {
+        await requestJson("/api/user/config/files", { method: "POST", body: form });
+        authMessage.textContent = "文件已上传。";
+        await refreshConfig();
+      } catch (error) {
+        authMessage.textContent = error.message;
+      }
+    });
+
     sendEmail.addEventListener("change", () => {
       emailRow.style.display = sendEmail.checked ? "grid" : "none";
       if (!sendEmail.checked) {
-        const wrapper = fields.email_to.closest(".field");
-        wrapper.classList.remove("invalid");
+        fields.email_to.closest(".field").classList.remove("invalid");
         fields.email_to.value = "";
       }
     });
@@ -553,9 +526,9 @@
       novelMessage.textContent = "";
       if (!state.authenticated) {
         novelMessage.textContent = "请先登录后再使用该功能。";
+        accountBackdrop.classList.add("open");
         return;
       }
-
       const payload = {
         action: document.getElementById("novel-action").value,
         article_type: fields.article_type.value,
@@ -567,19 +540,11 @@
         send_email: sendEmail.checked,
         email_to: fields.email_to.value,
       };
-
-      if (!validatePayload(payload)) {
-        return;
-      }
-
+      if (!validateNovel(payload)) return;
       resultBox.textContent = "执行中...";
       latestPreview.textContent = "等待输出...";
-
       try {
-        const data = await requestJson("/api/novel/run", {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
+        const data = await requestJson("/api/novel/run", { method: "POST", body: JSON.stringify(payload) });
         resultBox.textContent = [
           `returncode: ${data.returncode}`,
           data.email && data.email.requested ? `email: ${data.email.message}` : "",
@@ -590,12 +555,8 @@
           "stderr:",
           data.stderr || "(empty)",
         ].filter(Boolean).join("\n");
-        latestPreview.textContent = data.latest_file
-          ? `${data.latest_file.relative_path}\n\n${data.latest_file.preview}`
-          : "暂无输出。";
-        if (data.account) {
-          renderAuth(data.account);
-        }
+        latestPreview.textContent = data.latest_file ? `${data.latest_file.relative_path}\n\n${data.latest_file.preview}` : "暂无输出。";
+        if (data.account) renderAuth(data.account);
         await refreshFiles();
       } catch (error) {
         resultBox.textContent = error.message;
@@ -603,8 +564,35 @@
       }
     });
 
+    document.getElementById("run-video").addEventListener("click", async () => {
+      videoMessage.textContent = "";
+      if (!state.authenticated) {
+        videoMessage.textContent = "请先登录后再使用该功能。";
+        accountBackdrop.classList.add("open");
+        return;
+      }
+      videoResult.textContent = "执行中...";
+      try {
+        const data = await requestJson("/api/video/run", {
+          method: "POST",
+          body: JSON.stringify({ action: document.getElementById("video-action").value }),
+        });
+        videoResult.textContent = [
+          `returncode: ${data.returncode}`,
+          "",
+          "stdout:",
+          data.stdout || "(empty)",
+          "",
+          "stderr:",
+          data.stderr || "(empty)",
+        ].join("\n");
+      } catch (error) {
+        videoResult.textContent = error.message;
+      }
+    });
+
     refreshMe().catch((error) => {
-      loginStatus.textContent = "登录状态读取失败";
+      accountStatus.textContent = "登录状态读取失败";
       authMessage.textContent = error.message;
     });
   </script>

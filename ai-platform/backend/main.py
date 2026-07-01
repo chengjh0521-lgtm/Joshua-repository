@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -12,6 +12,8 @@ from backend.services import auth_service
 from backend.services.email_service import EmailConfigError, EmailSendError, send_generated_file_email
 from backend.services.file_service import get_output_file, list_output_files
 from backend.services.novel_service import NovelActionError, run_novel_agent
+from backend.services.user_config_service import public_config, save_upload, update_config
+from backend.services.video_agent_service import VideoAgentError, run_video_agent
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -52,6 +54,17 @@ class NovelRunPayload(BaseModel):
     words: int | None = None
 
 
+class UserConfigPayload(BaseModel):
+    email_receiver: str | None = None
+    auto_publish: bool | None = None
+    auto_publish_bilibili: bool | None = None
+    auto_publish_douyin: bool | None = None
+
+
+class VideoRunPayload(BaseModel):
+    action: str = "status"
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
@@ -75,6 +88,37 @@ async def logout(request: Request):
 @app.get("/api/auth/me")
 async def me(request: Request):
     return auth_service.current_user(request)
+
+
+@app.get("/api/user/config")
+async def get_user_config(request: Request):
+    username = auth_service.require_login(request)
+    return public_config(username)
+
+
+@app.post("/api/user/config")
+async def post_user_config(request: Request, payload: UserConfigPayload):
+    username = auth_service.require_login(request)
+    update_config(username, payload.model_dump(exclude_none=True))
+    return public_config(username)
+
+
+@app.post("/api/user/config/files")
+async def post_user_config_files(
+    request: Request,
+    bilibili_state: UploadFile | None = File(default=None),
+    douyin_state: UploadFile | None = File(default=None),
+    youtube_cookie: UploadFile | None = File(default=None),
+):
+    username = auth_service.require_login(request)
+    result = public_config(username)
+    if bilibili_state is not None:
+        result = await save_upload(username, "bilibili_state", bilibili_state)
+    if douyin_state is not None:
+        result = await save_upload(username, "douyin_state", douyin_state)
+    if youtube_cookie is not None:
+        result = await save_upload(username, "youtube_cookie", youtube_cookie)
+    return result
 
 
 @app.post("/api/novel/run")
@@ -115,6 +159,16 @@ async def novel_run(request: Request, payload: NovelRunPayload):
                 "message": f"邮件未发送：{exc}",
             }
 
+    return JSONResponse(result)
+
+
+@app.post("/api/video/run")
+async def video_run(request: Request, payload: VideoRunPayload):
+    username = auth_service.require_login(request)
+    try:
+        result = run_video_agent(PROJECT_ROOT, username, payload.action)
+    except VideoAgentError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return JSONResponse(result)
 
 

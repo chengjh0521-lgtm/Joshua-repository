@@ -8,9 +8,12 @@ WORKDIR /app
 
 COPY backend/requirements.txt /tmp/backend-requirements.txt
 COPY apps/novel-writer-agent/requirements.txt /tmp/agent-requirements.txt
+COPY apps/video-publisher-agent/requirements.txt /tmp/video-agent-requirements.txt
 
 RUN pip install --no-cache-dir -r /tmp/backend-requirements.txt \
-    && pip install --no-cache-dir -r /tmp/agent-requirements.txt
+    && pip install --no-cache-dir -r /tmp/agent-requirements.txt \
+    && pip install --no-cache-dir -r /tmp/video-agent-requirements.txt \
+    && python -m playwright install --with-deps chromium
 
 COPY backend /app/backend
 COPY apps /app/apps
