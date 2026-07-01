@@ -501,8 +501,8 @@
               <span class="field-error"></span>
             </label>
             <label class="field wide">
-              风格
-              <input id="style" placeholder="例如：中式恐怖、冷静克制、完整闭合">
+              风格（可选）
+              <input id="style" placeholder="例如：中式恐怖、冷静克制、完整闭合；不填则使用默认叙事风格">
               <span class="field-error"></span>
             </label>
             <label class="toggle-row">
@@ -1162,7 +1162,6 @@
       if (fields.max_words.value.trim() && Number(fields.max_words.value) > 50000) addFieldError(fields.max_words, "最大字数不能超过 50000。");
       if (fields.min_words.value.trim() && fields.max_words.value.trim() && payload.max_words < payload.min_words) addFieldError(fields.max_words, "最大字数不能小于最小字数。");
       if (!payload.description.trim()) addFieldError(fields.description, "请填写描述。");
-      if (!payload.style.trim()) addFieldError(fields.style, "请填写风格。");
       if (payload.send_email && !payload.email_to.trim()) addFieldError(fields.email_to, "请填写收件邮箱。");
       if (payload.send_email && payload.email_to.trim() && !fields.email_to.checkValidity()) addFieldError(fields.email_to, "请填写有效的邮箱地址。");
       if (document.querySelector(".field.invalid")) {
@@ -1522,6 +1521,11 @@
       }
       if (!novelStateSelect.value || novelStateSelect.value === "short") {
         novelMessage.textContent = "默认短篇状态不能删除。";
+        return;
+      }
+      const selected = currentNovelState();
+      const name = selected ? selected.name : "当前状态";
+      if (!window.confirm(`确定删除“${name}”吗？删除后无法找回，该状态下的设定、记忆和输出文件都会被删除。`)) {
         return;
       }
       try {

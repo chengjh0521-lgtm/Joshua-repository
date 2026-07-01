@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -175,4 +176,12 @@ def delete_state(username: str, state_id: str) -> dict:
     store["states"] = next_states
     if store.get("selected_state_id") == state_id:
         store["selected_state_id"] = DEFAULT_SHORT_STATE_ID
+    runtime_root = state_runtime_root(username, state_id)
+    states_root = _states_root(username).resolve()
+    resolved_runtime_root = runtime_root.resolve()
+    try:
+        resolved_runtime_root.relative_to(states_root)
+    except ValueError as exc:
+        raise ValueError("状态目录非法，已取消删除。") from exc
+    shutil.rmtree(resolved_runtime_root, ignore_errors=True)
     return _save_store(username, store)

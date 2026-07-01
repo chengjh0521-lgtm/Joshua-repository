@@ -1,511 +1,450 @@
+from __future__ import annotations
+
 import argparse
-import json
-import os
-import re
 import sys
-from datetime import datetime
 from pathlib import Path
 
-import httpx
-from dotenv import load_dotenv
+from agents.chapter_planner import ChapterPlanner
+from agents.chapter_writer import ChapterWriter
+from agents.market_research_agent import MarketResearchAgent
+from agents.memory_updater import MemoryUpdater
+from agents.originality_guard_agent import OriginalityGuardAgent
+from agents.reviewer import Reviewer
+from agents.rewriter import Rewriter
+from agents.short_story_writer import ShortStoryWriter
+from agents.story_builder_agent import StoryBuilderAgent
+from agents.trope_extract_agent import TropeExtractAgent
+from config import DATA_DIR, OUTPUT_DIR, PROJECT_ROOT, get_settings
+from services.deepseek_client import DeepSeekClient
+from services.file_manager import (
+    append_text,
+    chapter_filename,
+    ensure_directories,
+    list_clean_chapters,
+    read_text,
+    sanitize_filename_part,
+    short_story_filename,
+    write_text,
+)
+from services.email_sender import send_email
+from services.memory_store import MemoryStore
+from services.subtitle_converter import parse_duration, txt_to_srt
 
 
-AGENT_ROOT = Path(__file__).resolve().parent
-PROJECT_ROOT = AGENT_ROOT.parents[1]
-DATA_DIR = Path(os.getenv("NOVEL_AGENT_DATA_DIR", AGENT_ROOT / "data"))
-OUTPUT_DIR = Path(os.getenv("NOVEL_AGENT_OUTPUT_DIR", AGENT_ROOT / "output"))
-MEMORY_DIR = Path(os.getenv("NOVEL_AGENT_MEMORY_DIR", AGENT_ROOT / "novel_memory"))
-PROMPTS_DIR = AGENT_ROOT / "prompts"
-
-CHAPTERS_CLEAN_DIR = OUTPUT_DIR / "chapters_clean"
-CHAPTERS_WITH_NOTES_DIR = OUTPUT_DIR / "chapters_with_notes"
-SHORT_CLEAN_DIR = OUTPUT_DIR / "short_stories"
-SHORT_WITH_NOTES_DIR = OUTPUT_DIR / "short_stories_with_notes"
-
-STATE_FILE = MEMORY_DIR / "project_state.json"
-LONG_MEMORY_FILE = MEMORY_DIR / "long_novel_memory.json"
-RESEARCH_FILE = MEMORY_DIR / "research_notes.txt"
-PATTERNS_FILE = MEMORY_DIR / "extracted_patterns.txt"
-
-WINDOWS_FORBIDDEN = r'<>:"/\|?*'
+def make_client() -> DeepSeekClient:
+    return DeepSeekClient(get_settings(require_api_key=True))
 
 
-def section(text: str, name: str) -> str:
-    pattern = rf"---{re.escape(name)}---\s*(.*?)(?=\n---[A-Z_]+---|\Z)"
-    match = re.search(pattern, text, flags=re.S)
-    return match.group(1).strip() if match else ""
-
-
-def ensure_dirs() -> None:
-    for path in (
-        DATA_DIR,
-        OUTPUT_DIR,
-        MEMORY_DIR,
-        PROMPTS_DIR,
-        CHAPTERS_CLEAN_DIR,
-        CHAPTERS_WITH_NOTES_DIR,
-        SHORT_CLEAN_DIR,
-        SHORT_WITH_NOTES_DIR,
-    ):
-        path.mkdir(parents=True, exist_ok=True)
-
-
-def load_env() -> None:
-    load_dotenv(PROJECT_ROOT / ".env")
-
-
-def safe_filename(value: str, fallback: str = "未命名") -> str:
-    cleaned = "".join("_" if char in WINDOWS_FORBIDDEN else char for char in value)
-    cleaned = re.sub(r"\s+", "_", cleaned).strip("._ ")
-    cleaned = re.sub(r"_+", "_", cleaned)
-    return cleaned[:80] or fallback
-
-
-def read_text(path: Path, default: str = "") -> str:
-    if not path.exists():
-        return default
-    return path.read_text(encoding="utf-8")
-
-
-def write_text(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
-
-
-def load_json(path: Path, default: dict) -> dict:
-    if not path.exists():
-        return default
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return default
-
-
-def save_json(path: Path, data: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def word_range(min_words: int, max_words: int) -> str:
-    return f"{min_words}-{max_words} 字"
-
-
-def init_project() -> None:
-    ensure_dirs()
-    if not STATE_FILE.exists():
-        save_json(
-            STATE_FILE,
-            {
-                "created_at": datetime.now().isoformat(timespec="seconds"),
-                "chapter_count": 0,
-                "genre": "",
-                "style": "",
-                "last_goal": "",
-            },
-        )
-    if not LONG_MEMORY_FILE.exists():
-        save_json(
-            LONG_MEMORY_FILE,
-            {
-                "premise": "",
-                "characters": [],
-                "world_rules": [],
-                "open_threads": [],
-                "chapter_summaries": [],
-            },
-        )
-    print("小说 Agent 已初始化。")
-    print(f"记忆目录：{MEMORY_DIR}")
-    print(f"输出目录：{OUTPUT_DIR}")
-
-
-def status() -> None:
-    ensure_dirs()
-    state = load_json(STATE_FILE, {})
-    memory = load_json(LONG_MEMORY_FILE, {})
-    chapter_files = sorted(CHAPTERS_CLEAN_DIR.glob("*.txt"))
-    short_files = sorted(SHORT_CLEAN_DIR.glob("*.txt"))
-    print("小说 Agent 状态")
-    print(f"- 已初始化：{'是' if STATE_FILE.exists() else '否'}")
-    print(f"- 长篇章节数：{len(chapter_files)}")
-    print(f"- 短篇数量：{len(short_files)}")
-    print(f"- 当前题材：{state.get('genre', '') or '未设置'}")
-    print(f"- 当前风格：{state.get('style', '') or '未设置'}")
-    print(f"- 长篇记忆摘要数：{len(memory.get('chapter_summaries', []))}")
-
-
-def research(input_path: str) -> None:
-    ensure_dirs()
-    source = (AGENT_ROOT / input_path).resolve()
-    if AGENT_ROOT not in source.parents:
-        raise SystemExit("input 必须位于 novel-writer-agent 目录内。")
-    if not source.exists():
-        raise SystemExit(f"找不到调研输入文件：{source}")
-
-    note = (
-        "市场调研资料（用户手动整理的公开信息）\n"
-        "禁止抓取或复制小说正文，只提炼抽象题材、标签、读者期待和节奏偏好。\n\n"
-        f"{source.read_text(encoding='utf-8')}\n"
+def build_generation_goal(description: str, min_words: int, max_words: int, max_paragraphs: int) -> str:
+    if min_words <= 0:
+        raise ValueError("--min-words must be greater than 0.")
+    if max_words < min_words:
+        raise ValueError("--max-words must be greater than or equal to --min-words.")
+    if max_paragraphs <= 0:
+        raise ValueError("--max-paragraphs must be greater than 0.")
+    return (
+        f"{description.strip()}\n\n"
+        f"本次生成约束：最少 {min_words} 字，最多 {max_words} 字，"
+        f"最多 {max_paragraphs} 个自然段。必须优先遵守这些长度和段落约束。"
     )
-    write_text(RESEARCH_FILE, note)
-    print(f"调研资料已保存：{RESEARCH_FILE}")
 
 
-def extract_patterns() -> None:
-    ensure_dirs()
-    notes = read_text(RESEARCH_FILE, "")
-    if not notes:
+def maybe_send_generated_email(args: argparse.Namespace, *, title: str, body: str, attachment_path: Path) -> None:
+    if not getattr(args, "send_email", False):
+        return
+    email_to = getattr(args, "email_to", None)
+    if not email_to:
+        raise ValueError("--email-to is required when --send-email is enabled.")
+    send_email(
+        to_email=email_to,
+        subject=f"novel-writer-agent 生成内容：{title}",
+        body=body,
+        attachment_path=attachment_path,
+    )
+    print(f"已发送邮件到: {email_to}")
+
+
+def command_init(_: argparse.Namespace) -> None:
+    ensure_directories()
+    MemoryStore().initialize()
+    sample_path = DATA_DIR / "fanqie_top10.txt"
+    if not sample_path.exists():
         write_text(
-            PATTERNS_FILE,
-            "暂无调研资料。可先运行 research 命令导入用户手动整理的公开资料。\n",
+            sample_path,
+            "# 手动整理番茄热门前十资料\n\n请按“书名 / 题材 / 标签 / 简介 / 读者看点 / 榜单位置”整理，禁止粘贴小说正文。\n",
+        )
+    print("初始化完成。请复制 .env.example 为 .env，并填写 DEEPSEEK_API_KEY。")
+
+
+def command_research(args: argparse.Namespace) -> None:
+    store = MemoryStore()
+    store.initialize()
+    client = make_client()
+    input_path = (PROJECT_ROOT / args.input).resolve() if not Path(args.input).is_absolute() else Path(args.input)
+    if not input_path.exists():
+        raise FileNotFoundError(f"Input file not found: {input_path}")
+    report = MarketResearchAgent(client).run(input_path)
+    store.write("market_report.md", report)
+    print("已生成 novel_memory/market_report.md")
+
+
+def command_extract(_: argparse.Namespace) -> None:
+    store = MemoryStore()
+    store.initialize()
+    client = make_client()
+    trope_library, originality_rules = TropeExtractAgent(client).run(store.read("market_report.md"))
+    store.write("trope_library.md", trope_library)
+    store.write("originality_rules.md", originality_rules)
+    print("已生成 novel_memory/trope_library.md 和 novel_memory/originality_rules.md")
+
+
+def command_build(args: argparse.Namespace) -> None:
+    store = MemoryStore()
+    store.initialize()
+    client = make_client()
+    bundle = StoryBuilderAgent(client).run(
+        genre=args.genre,
+        style=args.style,
+        trope_library=store.read("trope_library.md"),
+        originality_rules=store.read("originality_rules.md"),
+    )
+    store.write("story_bible.md", bundle.story_bible)
+    store.write("characters.md", bundle.characters)
+    store.write("plot_timeline.md", bundle.plot_timeline)
+    store.write("foreshadowing.md", bundle.foreshadowing)
+    store.write("chapter_summaries.md", "# 章节摘要\n\n尚未生成章节。")
+    print("已生成小说大框架与初始记忆文件。")
+
+
+def command_write(args: argparse.Namespace) -> None:
+    store = MemoryStore()
+    store.initialize()
+    ensure_directories()
+    client = make_client()
+
+    chapter_number = len(list_clean_chapters()) + 1
+    memory = store.load()
+    min_words = getattr(args, "min_words", 100)
+    max_words = getattr(args, "max_words", 3000)
+    max_paragraphs = getattr(args, "max_paragraphs", 4)
+    remove_ai = getattr(args, "remove_ai", True)
+    goal = build_generation_goal(args.goal, min_words, max_words, max_paragraphs)
+
+    print(f"开始生成第{chapter_number:03d}章：规划剧情...")
+    chapter_plan = ChapterPlanner(client).run(memory, chapter_number, goal)
+
+    print("生成正文草稿...")
+    draft = ChapterWriter(client).run(memory, chapter_number, chapter_plan, goal)
+
+    if remove_ai:
+        print("自我审稿...")
+        review_notes = Reviewer(client).run(draft.body, chapter_plan, memory)
+
+        print("去 AI 味改写...")
+        rewrite = Rewriter(client).run(draft.body, review_notes)
+        final_body = rewrite.body
+        rewrite_notes = rewrite.notes
+    else:
+        review_notes = "未启用去 AI 审稿。"
+        final_body = draft.body
+        rewrite_notes = "未启用去 AI 改写。"
+
+    print("执行原创性检查...")
+    guard = OriginalityGuardAgent(client).check(
+        final_body,
+        memory.originality_rules,
+        memory.story_bible,
+        memory.trope_library,
+    )
+    if remove_ai and not guard.passed:
+        print("原创性检查提示风险，进行一次定向改写...")
+        rewrite = Rewriter(client).run(final_body, review_notes, guard.report)
+        final_body = rewrite.body
+        rewrite_notes = rewrite.notes
+        guard = OriginalityGuardAgent(client).check(
+            final_body,
+            memory.originality_rules,
+            memory.story_bible,
+            memory.trope_library,
+        )
+
+    print("更新记忆...")
+    update = MemoryUpdater(client).run(memory, chapter_number, draft.title, final_body)
+
+    filename = chapter_filename(chapter_number, draft.title)
+    clean_path = OUTPUT_DIR / "chapters_clean" / filename
+    notes_path = OUTPUT_DIR / "chapters_with_notes" / filename
+    write_text(clean_path, final_body)
+    write_text(
+        notes_path,
+        "\n\n".join(
+            [
+                final_body,
+                f"---审稿意见---\n{review_notes}",
+                f"---改写说明---\n{rewrite_notes}",
+                f"---原创性检查---\n{'通过' if guard.passed else '仍需人工复核'}\n{guard.report}",
+                f"---本章摘要---\n{update.chapter_summary}",
+                f"---人物状态更新---\n{update.characters}",
+                f"---剧情时间线更新---\n{update.plot_timeline}",
+                f"---伏笔更新---\n{update.foreshadowing}",
+                f"---下一章钩子---\n{update.next_hook}",
+                f"---本章规划---\n{chapter_plan}",
+            ]
+        ),
+    )
+
+    append_text(store.root / "chapter_summaries.md", update.chapter_summary)
+    store.write("characters.md", update.characters)
+    store.write("plot_timeline.md", update.plot_timeline)
+    store.write("foreshadowing.md", update.foreshadowing)
+
+    print(f"已保存 clean: {clean_path}")
+    print(f"已保存 with_notes: {notes_path}")
+    return {
+        "title": draft.title,
+        "body": final_body,
+        "clean_path": clean_path,
+        "notes_path": notes_path,
+    }
+
+
+def command_short(args: argparse.Namespace) -> None:
+    store = MemoryStore()
+    store.initialize()
+    ensure_directories()
+    client = make_client()
+    max_words = getattr(args, "max_words", getattr(args, "words", 3000))
+    min_words = getattr(args, "min_words", 100)
+    max_paragraphs = getattr(args, "max_paragraphs", 4)
+    remove_ai = getattr(args, "remove_ai", True)
+    goal = build_generation_goal(args.goal, min_words, max_words, max_paragraphs)
+
+    print("开始生成完整短篇小说...")
+    story = ShortStoryWriter(client).run(
+        goal=goal,
+        genre=args.genre,
+        style=args.style,
+        min_words=min_words,
+        max_words=max_words,
+        max_paragraphs=max_paragraphs,
+        remove_ai=remove_ai,
+        trope_library=store.read("trope_library.md"),
+        originality_rules=store.read("originality_rules.md"),
+    )
+
+    print("执行原创性检查...")
+    guard = OriginalityGuardAgent(client).check(
+        story.body,
+        store.read("originality_rules.md"),
+        "这是独立短篇小说，不属于长篇 story_bible。",
+        store.read("trope_library.md"),
+    )
+
+    filename = short_story_filename(story.title)
+    clean_path = OUTPUT_DIR / "short_stories" / filename
+    notes_path = OUTPUT_DIR / "short_stories_with_notes" / filename
+    write_text(clean_path, story.body)
+    write_text(
+        notes_path,
+        "\n\n".join(
+            [
+                story.body,
+                f"---短篇标题---\n{story.title}",
+                f"---生成要求---\n{args.goal.strip()}",
+                f"---自审与改写说明---\n{story.notes}",
+                f"---原创性检查---\n{'通过' if guard.passed else '仍需人工复核'}\n{guard.report}",
+            ]
+        ),
+    )
+
+    print(f"已保存短篇 clean: {clean_path}")
+    print(f"已保存短篇 with_notes: {notes_path}")
+    return {
+        "title": story.title,
+        "body": story.body,
+        "clean_path": clean_path,
+        "notes_path": notes_path,
+    }
+
+
+def command_subtitle(args: argparse.Namespace) -> None:
+    ensure_directories()
+    if args.max_chars <= 0:
+        raise ValueError("--max-chars must be greater than 0.")
+
+    input_path = (PROJECT_ROOT / args.input).resolve() if not Path(args.input).is_absolute() else Path(args.input)
+    if not input_path.exists():
+        raise FileNotFoundError(f"Input file not found: {input_path}")
+
+    total_seconds = parse_duration(args.duration)
+    text = read_text(input_path)
+    srt = txt_to_srt(text, total_seconds, max_chars=args.max_chars)
+    cue_count = len([block for block in srt.strip().split("\n\n") if block.strip()])
+
+    if args.output:
+        output_path = (PROJECT_ROOT / args.output).resolve() if not Path(args.output).is_absolute() else Path(args.output)
+    else:
+        safe_stem = sanitize_filename_part(input_path.stem, fallback="subtitle")
+        duration_label = args.duration.replace(":", "-").replace(".", "_")
+        output_path = OUTPUT_DIR / "subtitles" / f"{safe_stem}_{duration_label}.srt"
+
+    write_text(output_path, srt.rstrip())
+    print(f"已生成字幕文件: {output_path}")
+    print(f"字幕条数: {cue_count}，平均时长: {total_seconds / cue_count:.2f} 秒")
+    if total_seconds / cue_count < 1:
+        print("提示：平均单条字幕少于 1 秒，可能阅读过快。可以增加 --duration，或调大 --max-chars。")
+
+
+def command_direct(args: argparse.Namespace) -> None:
+    if args.send_email and not args.email_to:
+        raise ValueError("--email-to is required when --send-email is enabled.")
+
+    if args.content_type == "长篇":
+        result = command_write(
+            argparse.Namespace(
+                goal=args.description,
+                min_words=args.min_words,
+                max_words=args.max_words,
+                max_paragraphs=args.max_paragraphs,
+                remove_ai=args.remove_ai,
+            )
+        )
+    elif args.content_type == "短篇":
+        result = command_short(
+            argparse.Namespace(
+                goal=args.description,
+                genre="短篇小说",
+                style="自然、有画面感、结尾有余味",
+                min_words=args.min_words,
+                max_words=args.max_words,
+                max_paragraphs=args.max_paragraphs,
+                remove_ai=args.remove_ai,
+            )
         )
     else:
-        prompt = (
-            "请从以下公开资料中提炼抽象创作共性，禁止复刻具体人物、桥段、台词、设定和世界观。\n\n"
-            f"{notes[:8000]}"
-        )
-        write_text(PATTERNS_FILE, generate_text(prompt, 600, 1000, False, "patterns"))
-    print(f"抽象共性已保存：{PATTERNS_FILE}")
+        raise ValueError("content_type must be 长篇 or 短篇.")
 
-
-def build_project(genre: str, style: str) -> None:
-    ensure_dirs()
-    state = load_json(STATE_FILE, {})
-    memory = load_json(LONG_MEMORY_FILE, {})
-    patterns = read_text(PATTERNS_FILE, "暂无抽象共性。")
-    prompt = (
-        f"请为一个长篇小说项目建立简洁创作记忆。\n题材：{genre or '未指定'}\n"
-        f"风格：{style or '未指定'}\n参考抽象共性：{patterns[:4000]}\n"
-        "要求：只写原创设定，不抄袭具体作品。"
-    )
-    memory["premise"] = generate_text(prompt, 700, 1000, False, "build")
-    memory.setdefault("characters", [])
-    memory.setdefault("world_rules", [])
-    memory.setdefault("open_threads", [])
-    memory.setdefault("chapter_summaries", [])
-    state.update({"genre": genre or "", "style": style or ""})
-    save_json(STATE_FILE, state)
-    save_json(LONG_MEMORY_FILE, memory)
-    print("长篇项目记忆已建立。")
-
-
-def call_deepseek(prompt: str, max_words: int, purpose: str) -> str:
-    api_key = os.getenv("DEEPSEEK_API_KEY", "")
-    model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
-    base_url = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/")
-    if not api_key:
-        raise RuntimeError("未配置 DEEPSEEK_API_KEY。")
-
-    if purpose == "short":
-        system_prompt = (
-            "你是成熟的中文短篇小说作者。短篇不是长篇开头，也不是第一章。"
-            "你必须写一个小体量但完整闭合的故事：核心问题出现、升级、转折、答案揭示、结尾收束。"
-            "不许写成世界观序章、连载开端、角色觉醒开局或下一章预告。"
-            "只创作原创内容，禁止抄袭具体人物、桥段、台词、设定和世界观。"
-        )
-    else:
-        system_prompt = (
-            "你是成熟的中文类型小说作者和严厉的自审编辑。"
-            "只创作原创内容，禁止抄袭具体人物、桥段、台词、设定和世界观。"
-            "长篇只写当前一章，不要输出创作课、解释、Markdown 标题或提示词分析。"
+    if result:
+        maybe_send_generated_email(
+            args,
+            title=result["title"],
+            body=result["body"],
+            attachment_path=result["clean_path"],
         )
 
-    response = httpx.post(
-        f"{base_url}/chat/completions",
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json={
-            "model": model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": system_prompt,
-                },
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.82 if purpose == "short" else 0.78,
-            "max_tokens": max(1000, min(max_words * 2, 8000)),
-        },
-        timeout=120,
-    )
-    response.raise_for_status()
-    data = response.json()
-    return data["choices"][0]["message"]["content"].strip()
+
+def command_status(_: argparse.Namespace) -> None:
+    store = MemoryStore()
+    store.initialize()
+    chapters = list_clean_chapters()
+    summaries = store.read("chapter_summaries.md")
+    characters = store.read("characters.md")
+    foreshadowing = store.read("foreshadowing.md")
+    timeline = store.read("plot_timeline.md")
+
+    recent_summary = "暂无"
+    summary_blocks = [block.strip() for block in summaries.split("\n\n") if block.strip()]
+    for block in reversed(summary_blocks):
+        if "尚未生成章节" not in block and not block.startswith("#"):
+            recent_summary = block
+            break
+
+    print(f"已生成章节数：{len(chapters)}")
+    if chapters:
+        print(f"最近章节文件：{chapters[-1].name}")
+    print("\n最近一章摘要：")
+    print(recent_summary)
+    print("\n主要人物状态：")
+    print(characters[:1500].rstrip() or "暂无")
+    print("\n未回收伏笔：")
+    print(foreshadowing[:1500].rstrip() or "暂无")
+    print("\n下一章建议：")
+    print(_next_suggestion(len(chapters), timeline, foreshadowing))
 
 
-def mock_text(prompt: str, min_words: int, max_words: int, de_ai: bool, purpose: str) -> str:
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    de_ai_note = "已要求降低 AI 腔，优先使用具体动作、场景细节和自然句式。" if de_ai else "未启用去 AI 味。"
-    if purpose == "short":
-        return (
-            "标题：雨夜便利店\n\n"
-            "凌晨两点，便利店门口的雨水漫过台阶。林澈刚把热柜里的包子重新摆好，门铃就响了。\n\n"
-            "进来的男人没有收伞。他站在收银台前，问这里还有没有十年前那种薄荷糖。林澈说早停产了。"
-            "男人却指了指柜台下面，说最后一盒被店长锁在铁盒里，钥匙压在验钞机底下。\n\n"
-            "林澈笑不出来了。验钞机底下真的有钥匙。铁盒里有一张小票，日期是十年前的今晚，"
-            "背面写着一句话：第三个顾客走出门，你就会想起来。\n\n"
-            "门铃第二次响起，一个女孩买走了热牛奶。第三次响起前，那个湿透的男人看着林澈，"
-            "像看着一面终于愿意照人的镜子。\n\n"
-            "林澈这才发现，小票上的签名不是店长，是他自己。\n\n"
-            "【备注】这是本地 mock 输出，用于验证流程，不消耗 DeepSeek Token。\n"
-            f"【生成时间】{timestamp}\n【字数范围】{word_range(min_words, max_words)}\n【去 AI】{de_ai_note}\n"
-            f"【目标】{prompt[:500]}\n"
-        )
-    if purpose == "patterns":
-        return (
-            "抽象共性：\n"
-            "1. 开篇迅速给出异常事件。\n"
-            "2. 主角目标清晰，并立刻承受代价。\n"
-            "3. 每章结尾留下新的问题，但答案应当在前文埋有线索。\n"
-            "4. 爽点来自信息差、选择压力和反转后的合理性，而不是复制具体桥段。\n"
-        )
-    if purpose == "build":
-        return (
-            "长篇记忆草案：主角因一次异常委托进入隐藏秩序的边缘。故事以现实细节托底，"
-            "每章推进一个可验证线索，同时扩大主角必须承担的代价。"
-        )
-    return (
-        "标题：异常委托\n\n"
-        "钟声响起时，主角收到一份没有发件人的委托。它要求他在午夜前找到一个不存在的地址，"
-        "否则昨天已经发生过的事故会再次发生。\n\n"
-        "他起初以为这是恶作剧，直到手机里出现一段十分钟后才会拍下的视频。视频中的他站在雨里，"
-        "手中握着一枚陌生钥匙，身后有人轻声叫出了他的真名。\n\n"
-        "【备注】这是本地 mock 输出，用于验证流程，不消耗 DeepSeek Token。\n"
-        f"【生成时间】{timestamp}\n【字数范围】{word_range(min_words, max_words)}\n【去 AI】{de_ai_note}\n"
-        f"【目标】{prompt[:500]}\n"
-    )
+def _next_suggestion(chapter_count: int, timeline: str, foreshadowing: str) -> str:
+    if chapter_count == 0:
+        return "先使用 `python main.py write --goal \"写开篇，建立主角困境和第一处悬念\"` 生成第一章。"
+    if "未回收" in foreshadowing or "待回收" in foreshadowing:
+        return "优先推进一个已埋伏笔，同时制造新的章节钩子。"
+    if timeline.strip():
+        return "承接上一章结果，推动主线冲突升级，并在结尾留下明确悬念。"
+    return "补强人物目标、外部压力和下一处悬念。"
 
 
-def generate_text(prompt: str, min_words: int, max_words: int, de_ai: bool, purpose: str) -> str:
-    load_env()
-    mock_enabled = os.getenv("NOVEL_AGENT_MOCK", "true").lower() != "false"
-    if mock_enabled:
-        return mock_text(prompt, min_words, max_words, de_ai, purpose)
-    return call_deepseek(prompt, max_words, purpose)
-
-
-def split_notes(content: str) -> tuple[str, str]:
-    structured_body = section(content, "BODY") or section(content, "CHAPTER")
-    structured_notes = section(content, "NOTES") or section(content, "SELF_REVIEW")
-    if structured_body:
-        title = section(content, "TITLE")
-        clean = structured_body.strip() + "\n"
-        with_notes_parts = []
-        if title:
-            with_notes_parts.append(f"标题：{title}")
-        with_notes_parts.append(clean.strip())
-        if structured_notes:
-            with_notes_parts.append(f"【备注】\n{structured_notes.strip()}")
-        return clean, "\n\n".join(with_notes_parts).strip() + "\n"
-
-    marker = "【备注】"
-    if marker not in content:
-        return content.strip() + "\n", content.strip() + "\n"
-    clean = content.split(marker, 1)[0].strip() + "\n"
-    return clean, content.strip() + "\n"
-
-
-def title_from_content(content: str, fallback: str) -> str:
-    structured_title = section(content, "TITLE")
-    if structured_title:
-        return safe_filename(structured_title, fallback)
-    first_line = next((line.strip() for line in content.splitlines() if line.strip()), "")
-    first_line = re.sub(r"^标题[:：]\s*", "", first_line)
-    return safe_filename(first_line, fallback)
-
-
-def de_ai_instruction(de_ai: bool) -> str:
-    if not de_ai:
-        return "不需要额外去 AI 味处理。"
-    return (
-        "请降低 AI 腔：减少空泛总结和套路化转折，多用具体动作、感官细节、人物选择和自然短句；"
-        "避免过度整齐的排比、模板化段落、解释型心理活动和说教式结尾。"
-    )
-
-
-def quality_rules() -> str:
-    return (
-        "质量要求：\n"
-        "- 开篇尽快进入具体场景，不写泛泛背景介绍。\n"
-        "- 用动作、对话、物件、环境变化承载信息，不用作者跳出来解释。\n"
-        "- 人物每一次选择都要有压力、代价或误判。\n"
-        "- 每 3-6 个自然段推进一次新信息或局势变化。\n"
-        "- 少用“他知道”“这一刻”“命运齿轮”“空气仿佛凝固”“一种说不出的感觉”等模板句。\n"
-        "- 不要用整齐排比堆情绪，不要写成故事梗概。\n"
-        "- 输出前在内部自检并改写一遍，正文只给最终稿。\n"
-    )
-
-
-def short_story_rules(min_words: int, max_words: int) -> str:
-    paragraph_cap = max(6, min(18, max_words // 180))
-    return (
-        "短篇完整性硬约束：\n"
-        "- 这是一篇短故事，不是长篇小说的第一章、序章、设定集或人物开局。\n"
-        "- 只围绕一个核心事件展开；控制在 1 个主要场景，必要时最多 2 个场景。\n"
-        "- 主要人物控制在 1-3 人，不铺开家族、组织、世界观、能力体系或长期任务线。\n"
-        "- 开头 2 段内必须出现具体冲突或异常，不要用大段背景解释。\n"
-        "- 中段必须让主角做一个具体选择，并因此付出一个小但明确的代价。\n"
-        "- 结尾必须回答开头提出的核心问题，关闭主冲突；可以有余味，但不能靠“未完待续”“更大的阴谋刚开始”“下一章”制造悬念。\n"
-        "- 反转如果出现，必须来自前文已经出现的物件、动作、错觉或信息差。\n"
-        "- 正文不要超过 "
-        f"{paragraph_cap} 个自然段；字数控制在 {min_words}-{max_words} 字之间。\n"
-        "- 输出前自检：如果读起来像长篇被截断，请重写成闭合短篇。\n"
-    )
-
-
-def write_chapter(goal: str, genre: str, style: str, min_words: int, max_words: int, de_ai: bool, is_next: bool) -> None:
-    ensure_dirs()
-    state = load_json(STATE_FILE, {"chapter_count": 0})
-    memory = load_json(LONG_MEMORY_FILE, {})
-    chapter_number = int(state.get("chapter_count", 0)) + 1
-    prompt = (
-        f"请写长篇小说第 {chapter_number:03d} 章。\n"
-        f"题材：{genre or state.get('genre') or '未指定'}\n"
-        f"风格：{style or state.get('style') or '未指定'}\n"
-        f"字数范围：{word_range(min_words, max_words)}\n"
-        f"用户描述：{goal}\n"
-        f"{de_ai_instruction(de_ai)}\n"
-        f"{quality_rules()}\n"
-        f"长篇记忆：{json.dumps(memory, ensure_ascii=False)[:5000]}\n"
-        "要求：只生成本章，不一次性生成整本；保持原创。\n"
-        "输出必须使用：\n"
-        "---TITLE---\n章节标题，不要带第几章。\n"
-        "---BODY---\n章节正文。\n"
-        "---NOTES---\n简述本章钩子、连续性和去 AI 处理。"
-    )
-    content = generate_text(prompt, min_words, max_words, de_ai, purpose="chapter")
-    clean, with_notes = split_notes(content)
-    title = title_from_content(content, f"第{chapter_number:03d}章")
-    filename = f"第{chapter_number:03d}章_{title}.txt"
-    write_text(CHAPTERS_WITH_NOTES_DIR / filename, with_notes)
-    write_text(CHAPTERS_CLEAN_DIR / filename, clean)
-
-    memory.setdefault("chapter_summaries", []).append(
-        {
-            "chapter": chapter_number,
-            "goal": goal,
-            "title": title,
-            "created_at": datetime.now().isoformat(timespec="seconds"),
-            "summary": clean[:300],
-        }
-    )
-    state.update(
-        {
-            "chapter_count": chapter_number,
-            "last_goal": goal,
-            "genre": genre or state.get("genre", ""),
-            "style": style or state.get("style", ""),
-        }
-    )
-    save_json(STATE_FILE, state)
-    save_json(LONG_MEMORY_FILE, memory)
-    print(f"章节已生成：{filename}")
-    print(f"模式：{'next' if is_next else 'write'}")
-
-
-def write_short(goal: str, genre: str, style: str, min_words: int, max_words: int, de_ai: bool) -> None:
-    ensure_dirs()
-    prompt = (
-        "请写一个完整、独立、原创的中文短篇故事。\n"
-        "目标是“小体量的完整故事”，不是“长篇小说被截断的一章”。\n"
-        "严禁读取、承接、引用任何历史记忆、上一章、前文或之前短篇；只根据本次用户描述创作。\n"
-        f"题材：{genre or '未指定'}\n风格：{style or '未指定'}\n"
-        f"字数范围：{word_range(min_words, max_words)}\n用户描述：{goal}\n"
-        f"{de_ai_instruction(de_ai)}\n"
-        f"{quality_rules()}\n"
-        f"{short_story_rules(min_words, max_words)}\n"
-        "输出内容要求：\n"
-        "- 一次性完成开端、发展、转折、高潮、结尾，核心事件必须在文内解决。\n"
-        "- 不要自动续写下一篇，不要留下“下一章”，不要写成长篇开局。\n"
-        "- 不要写创作课、提纲、解释说明或 Markdown 标题。\n"
-        "- 每个自然段用空行分隔。\n"
-        "- 可以借鉴抽象类型节奏和情绪曲线，但禁止复用具体作品的人物、设定、能力体系、世界观、桥段、台词或剧情结构。\n"
-        "输出必须使用：\n"
-        "---TITLE---\n短篇标题。\n"
-        "---BODY---\n短篇正文。\n"
-        "---NOTES---\n简述自审结果、去 AI 处理和原创性边界。"
-    )
-    content = generate_text(prompt, min_words, max_words, de_ai, purpose="short")
-    clean, with_notes = split_notes(content)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    title = title_from_content(content, "独立短篇")
-    filename = f"短篇_{timestamp}_{title}.txt"
-    write_text(SHORT_WITH_NOTES_DIR / filename, with_notes)
-    write_text(SHORT_CLEAN_DIR / filename, clean)
-    print(f"短篇已生成：{filename}")
-
-
-def normalize_word_args(args: argparse.Namespace) -> tuple[int, int]:
-    max_words = args.max_words or args.words or 2500
-    min_words = args.min_words or max(100, int(max_words * 0.8))
-    if min_words > max_words:
-        raise SystemExit("最小字数不能大于最大字数。")
-    return min_words, max_words
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="novel-writer-agent")
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="novel-writer-agent: DeepSeek-only local novel writing agent")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    subparsers.add_parser("init")
-    subparsers.add_parser("status")
+    init_parser = subparsers.add_parser("init", help="初始化项目目录和记忆文件")
+    init_parser.set_defaults(func=command_init)
 
-    research_parser = subparsers.add_parser("research")
-    research_parser.add_argument("--input", required=True)
+    research_parser = subparsers.add_parser("research", help="根据手动整理的番茄热门资料生成市场报告")
+    research_parser.add_argument("--input", required=True, help="例如 data/fanqie_top10.txt")
+    research_parser.set_defaults(func=command_research)
 
-    subparsers.add_parser("extract")
+    extract_parser = subparsers.add_parser("extract", help="提炼爆款共性和原创性规则")
+    extract_parser.set_defaults(func=command_extract)
 
-    build_parser = subparsers.add_parser("build")
-    build_parser.add_argument("--genre", default="")
-    build_parser.add_argument("--style", default="")
+    build = subparsers.add_parser("build", help="生成原创小说大框架")
+    build.add_argument("--genre", required=True)
+    build.add_argument("--style", required=True)
+    build.set_defaults(func=command_build)
 
-    for name in ("write", "next", "short"):
-        action_parser = subparsers.add_parser(name)
-        action_parser.add_argument("--goal", default="")
-        action_parser.add_argument("--genre", default="")
-        action_parser.add_argument("--style", default="")
-        action_parser.add_argument("--words", type=int, default=None)
-        action_parser.add_argument("--min-words", type=int, default=None)
-        action_parser.add_argument("--max-words", type=int, default=None)
-        action_parser.add_argument("--de-ai", action="store_true")
+    write = subparsers.add_parser("write", help="只生成下一章")
+    write.add_argument("--goal", required=True, help="本章方向要求")
+    write.set_defaults(func=command_write)
 
-    return parser.parse_args()
+    next_parser = subparsers.add_parser("next", help="write 命令别名：只生成下一章")
+    next_parser.add_argument("--goal", required=True, help="本章方向要求")
+    next_parser.set_defaults(func=command_write)
+
+    short = subparsers.add_parser("short", help="生成一个完整原创短篇小说，不更新长篇记忆")
+    short.add_argument("--goal", required=True, help="短篇创作要求")
+    short.add_argument("--genre", default="悬疑短篇", help="短篇类型，默认：悬疑短篇")
+    short.add_argument("--style", default="自然、有画面感、结尾有余味", help="短篇风格")
+    short.add_argument("--words", type=int, default=3500, help="目标字数，默认：3500")
+    short.set_defaults(func=command_short)
+
+    subtitle = subparsers.add_parser("subtitle", help="把 txt 文件转换为指定总时长的 SRT 字幕")
+    subtitle.add_argument("--input", required=True, help="输入 txt 文件路径")
+    subtitle.add_argument("--duration", required=True, help="字幕总时长，例如 180、03:00、00:03:00")
+    subtitle.add_argument("--output", help="输出 srt 路径，默认保存到 output/subtitles/")
+    subtitle.add_argument("--max-chars", type=int, default=24, help="每条字幕最大字符数，默认：24")
+    subtitle.set_defaults(func=command_subtitle)
+
+    status = subparsers.add_parser("status", help="查看当前小说状态")
+    status.set_defaults(func=command_status)
+
+    return parser
 
 
-def main() -> int:
-    args = parse_args()
-    ensure_dirs()
-    if args.command == "init":
-        init_project()
-    elif args.command == "status":
-        status()
-    elif args.command == "research":
-        research(args.input)
-    elif args.command == "extract":
-        extract_patterns()
-    elif args.command == "build":
-        build_project(args.genre, args.style)
-    elif args.command in {"write", "next", "short"}:
-        if not args.goal:
-            raise SystemExit(f"{args.command} 需要 --goal。")
-        min_words, max_words = normalize_word_args(args)
-        if args.command == "short":
-            write_short(args.goal, args.genre, args.style, min_words, max_words, args.de_ai)
-        else:
-            write_chapter(
-                args.goal,
-                args.genre,
-                args.style,
-                min_words,
-                max_words,
-                args.de_ai,
-                is_next=args.command == "next",
-            )
-    return 0
+def build_direct_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="直接生成长篇下一章或完整短篇。示例：python main 长篇 \"承接上一章继续写\""
+    )
+    parser.add_argument("content_type", choices=["长篇", "短篇"], help="生成类型：长篇 或 短篇")
+    parser.add_argument("description", help="生成内容描述")
+    parser.add_argument("--max-words", type=int, default=3000, help="最大字数，默认：3000")
+    parser.add_argument("--min-words", type=int, default=100, help="最小字数，默认：100")
+    parser.add_argument("--max-paragraphs", type=int, default=4, help="最大段落数，默认：4")
+    parser.add_argument("--remove-ai", action="store_true", help="是否去 AI，默认：否")
+    parser.add_argument("--send-email", action="store_true", help="是否发送到邮件，默认：否")
+    parser.add_argument("--email-to", help="邮件发送地址。只有 --send-email 时有效，且此时必填")
+    return parser
+
+
+def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] in {"长篇", "短篇"}:
+        parser = build_direct_parser()
+        args = parser.parse_args()
+        command_direct(args)
+        return
+
+    parser = build_parser()
+    args = parser.parse_args()
+    args.func(args)
 
 
 if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except Exception as exc:
-        print(f"Agent 执行失败：{exc}", file=sys.stderr)
-        raise SystemExit(1)
+    main()
