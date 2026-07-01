@@ -408,11 +408,11 @@
             <span class="agent-desc">对接 YouTube 监管、下载、任务发布和平台登录态配置。</span>
           </span>
         </button>
-        <button class="agent-item disabled" type="button" data-agent="zhihu" disabled>
+        <button class="agent-item" type="button" data-agent="zhihu">
           <span class="agent-avatar">知</span>
           <span>
-            <span class="agent-name">知乎写作 Agent <span class="agent-status">待接入</span></span>
-            <span class="agent-desc">入口先保留，后续接入问答和文章生成流程。</span>
+            <span class="agent-name">知乎写作 Agent <span class="agent-status ready">可用</span></span>
+            <span class="agent-desc">输入选题，生成知乎长文或知乎想法，并保存为 txt。</span>
           </span>
         </button>
       </nav>
@@ -599,6 +599,49 @@
             </div>
           </div>
         </section>
+
+        <section id="zhihu-panel" class="agent-panel" aria-label="知乎写作 Agent">
+          <div class="panel-intro">
+            <div>
+              <h2>知乎写作 Agent</h2>
+              <p class="muted">用于根据选题生成知乎长文或知乎想法，结果会保存为 txt。</p>
+            </div>
+            <div class="required-note">选题和内容类型均为必填项</div>
+          </div>
+
+          <div class="form-grid">
+            <label class="field">
+              内容类型
+              <select id="zhihu-kind">
+                <option value="">请选择内容类型</option>
+                <option value="article">知乎长文</option>
+                <option value="idea">知乎想法</option>
+              </select>
+              <span class="field-error"></span>
+            </label>
+            <label class="field wide">
+              选题
+              <textarea id="zhihu-topic" placeholder="例如：AI 时代，哲学对普通人还有什么用？"></textarea>
+              <span class="field-error"></span>
+            </label>
+          </div>
+
+          <div class="inline-actions">
+            <button id="run-zhihu" type="button">启动知乎 Agent</button>
+          </div>
+          <div id="zhihu-message" class="message"></div>
+
+          <div class="result">
+            <div>
+              <h3>执行结果</h3>
+              <pre id="zhihu-result">等待执行...</pre>
+            </div>
+            <div class="preview">
+              <h3>最新输出文件预览</h3>
+              <pre id="zhihu-preview">暂无输出。</pre>
+            </div>
+          </div>
+        </section>
       </div>
     </main>
   </div>
@@ -693,6 +736,9 @@
     const bilibiliLoginGate = document.getElementById("bilibili-login-gate");
     const bilibiliLoginMessage = document.getElementById("bilibili-login-message");
     const bilibiliLoginActions = document.getElementById("bilibili-login-actions");
+    const zhihuMessage = document.getElementById("zhihu-message");
+    const zhihuResult = document.getElementById("zhihu-result");
+    const zhihuPreview = document.getElementById("zhihu-preview");
     const workspace = document.getElementById("workspace");
     const workspaceTitle = document.getElementById("workspace-title");
     const workspaceStatus = document.getElementById("workspace-status");
@@ -712,6 +758,11 @@
       publish_mode: document.getElementById("video-publish-mode"),
     };
 
+    const zhihuFields = {
+      kind: document.getElementById("zhihu-kind"),
+      topic: document.getElementById("zhihu-topic"),
+    };
+
     const agentMeta = {
       novel: {
         title: "小说 Agent",
@@ -722,6 +773,11 @@
         title: "视频监管发布 Agent",
         status: "先选择服务、通知和发布策略，再启动。",
         panel: document.getElementById("video-panel"),
+      },
+      zhihu: {
+        title: "知乎写作 Agent",
+        status: "输入选题后生成知乎长文或想法。",
+        panel: document.getElementById("zhihu-panel"),
       },
     };
 
@@ -867,7 +923,7 @@
     }
 
     function clearFieldErrors() {
-      [...Object.values(fields), ...Object.values(videoFields)].forEach((field) => {
+      [...Object.values(fields), ...Object.values(videoFields), ...Object.values(zhihuFields)].forEach((field) => {
         const wrapper = field.closest(".field");
         const error = wrapper ? wrapper.querySelector(".field-error") : null;
         if (wrapper) wrapper.classList.remove("invalid");
@@ -910,6 +966,19 @@
       return true;
     }
 
+    function validateZhihuConfig() {
+      clearFieldErrors();
+      if (!zhihuFields.kind.value) addFieldError(zhihuFields.kind, "请选择内容类型。");
+      if (!zhihuFields.topic.value.trim()) addFieldError(zhihuFields.topic, "请填写知乎选题。");
+      if (zhihuFields.topic.value.trim() && zhihuFields.topic.value.trim().length < 2) addFieldError(zhihuFields.topic, "选题至少需要 2 个字符。");
+      if (document.querySelector(".field.invalid")) {
+        zhihuMessage.textContent = "请先填写知乎 Agent 的必填项。";
+        focusFirstInvalid();
+        return false;
+      }
+      return true;
+    }
+
     function validateVideoConfig() {
       clearFieldErrors();
       if (!videoFields.service_type.value) addFieldError(videoFields.service_type, "请选择服务类型。");
@@ -946,7 +1015,7 @@
       return config;
     }
 
-    [...Object.values(fields), ...Object.values(videoFields)].forEach((field) => {
+    [...Object.values(fields), ...Object.values(videoFields), ...Object.values(zhihuFields)].forEach((field) => {
       field.addEventListener("input", () => field.closest(".field")?.classList.remove("invalid"));
       field.addEventListener("change", () => field.closest(".field")?.classList.remove("invalid"));
     });
@@ -1188,6 +1257,46 @@
         await refreshConfig();
       } catch (error) {
         videoResult.textContent = error.message;
+      }
+    });
+
+    document.getElementById("run-zhihu").addEventListener("click", async () => {
+      zhihuMessage.textContent = "";
+      if (!state.authenticated) {
+        zhihuMessage.textContent = "请先登录后再使用该功能。";
+        openAccountPanel();
+        return;
+      }
+      if (!validateZhihuConfig()) return;
+      zhihuResult.textContent = "执行中...";
+      zhihuPreview.textContent = "等待输出...";
+      try {
+        const data = await requestJson("/api/zhihu/run", {
+          method: "POST",
+          body: JSON.stringify({
+            kind: zhihuFields.kind.value,
+            topic: zhihuFields.topic.value,
+          }),
+        });
+        const result = data.result || {};
+        zhihuResult.textContent = [
+          `returncode: ${data.returncode}`,
+          `ok: ${data.ok}`,
+          result.id ? `id: ${result.id}` : "",
+          result.status ? `status: ${result.status}` : "",
+          result.title ? `title: ${result.title}` : "",
+          result.text_path ? `text_path: ${result.text_path}` : "",
+          data.error ? `error: ${data.error}` : "",
+          "",
+          "stderr:",
+          data.stderr || "(empty)",
+        ].filter(Boolean).join("\n");
+        zhihuPreview.textContent = result.latest_file
+          ? `${result.latest_file.name}\n\n${result.latest_file.preview}`
+          : "暂无输出。";
+      } catch (error) {
+        zhihuResult.textContent = error.message;
+        zhihuPreview.textContent = "执行失败。";
       }
     });
 

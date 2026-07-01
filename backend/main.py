@@ -19,6 +19,7 @@ from backend.services.video_agent_service import (
     run_video_agent,
     start_bilibili_login,
 )
+from backend.services.zhihu_agent_service import ZhihuAgentError, run_zhihu_agent
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -71,6 +72,11 @@ class UserConfigPayload(BaseModel):
 
 class VideoRunPayload(BaseModel):
     action: str = "status"
+
+
+class ZhihuRunPayload(BaseModel):
+    kind: str = "article"
+    topic: str
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -196,6 +202,16 @@ async def video_bilibili_login_start(request: Request):
 async def video_bilibili_login_complete(request: Request):
     username = auth_service.require_login(request)
     return JSONResponse(complete_bilibili_login(username))
+
+
+@app.post("/api/zhihu/run")
+async def zhihu_run(request: Request, payload: ZhihuRunPayload):
+    auth_service.require_login(request)
+    try:
+        result = run_zhihu_agent(PROJECT_ROOT, payload.kind, payload.topic)
+    except ZhihuAgentError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return JSONResponse(result)
 
 
 @app.get("/api/novel/files")

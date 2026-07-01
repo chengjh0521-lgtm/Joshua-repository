@@ -13,4 +13,6 @@ services:
       - ./apps/novel-writer-agent/novel_memory:/app/apps/novel-writer-agent/novel_memory
       - ./apps/novel-writer-agent/data:/app/apps/novel-writer-agent/data
       - ./backend/data:/app/backend/data
+      - ./apps/zhihu-writer-agent/backend/data:/app/apps/zhihu-writer-agent/backend/data
+      - ./apps/zhihu-writer-agent/txt_outputs:/app/apps/zhihu-writer-agent/txt_outputs
     restart: unless-stopped
