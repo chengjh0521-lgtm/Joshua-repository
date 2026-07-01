@@ -45,6 +45,7 @@ def get_latest_video(channel: Dict[str, Any]) -> Optional[Dict[str, str]]:
 
     cmd = [
         "yt-dlp",
+        "--extractor-args", "youtube:player_client=web,android",
         "--flat-playlist",
         "--playlist-end", "1",
         "--print", "%(id)s|||%(title)s|||%(url)s|||%(timestamp>%Y-%m-%d %H:%M:%S)s",

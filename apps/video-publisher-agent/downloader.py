@@ -165,12 +165,13 @@ def build_ydl_options(output_dir):
         # 关键：只下载当前视频，不下载 playlist
         "noplaylist": True,
         "remote_components": {"ejs:github"},
-        # 关键：强制用 android 客户端，避开部分 web challenge 问题
-        # "extractor_args": {
-        #     "youtube": {
-        #         "player_client": ["android"]
-        #     }
-        # },
+        # Avoid the YouTube TV client for Shorts; it can return
+        # "content is not available on this app" even when the video is playable.
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["web", "android"]
+            }
+        },
         "cookiefile": CONFIG.get("cookiefile") or None,
         # 如果你本地电脑有梯子，且 PowerShell 里 Proxy map 是 127.0.0.1:12334
         # 就加这一行；如果不是这个端口，改成你的实际代理端口
