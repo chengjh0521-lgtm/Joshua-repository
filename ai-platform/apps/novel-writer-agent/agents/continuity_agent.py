@@ -7,22 +7,21 @@ from services.deepseek_client import DeepSeekClient
 from services.memory_store import NovelMemory
 
 
-class DraftChapter(BaseModel):
-    title: str
-    body: str
+class ContinuityReport(BaseModel):
+    passed: bool
+    report: str
 
 
-class ChapterWriter:
+class ContinuityAgent:
     def __init__(self, client: DeepSeekClient):
         self.client = client
 
-    def run(self, memory: NovelMemory, chapter_number: int, chapter_plan: str, goal: str) -> DraftChapter:
+    def check(self, memory: NovelMemory, chapter_plan: str, chapter: str) -> ContinuityReport:
         prompt = self.client.render_prompt(
-            "chapter_write.md",
+            "continuity_check.md",
             system_rules=memory.system_rules,
-            chapter_number=chapter_number,
-            goal=goal,
             chapter_plan=chapter_plan,
+            chapter=chapter,
             story_bible=memory.story_bible,
             outline=memory.outline,
             characters=memory.characters,
@@ -32,8 +31,12 @@ class ChapterWriter:
             foreshadowing=memory.foreshadowing,
             chapter_summaries=memory.chapter_summaries,
         )
-        result = self.client.chat(prompt, system="你是中文类型小说作者。只写当前一章正文。", temperature=0.78, max_tokens=9000)
-        return DraftChapter(
-            title=section(result, "TITLE") or f"第{chapter_number:03d}章",
-            body=section(result, "BODY") or result,
+        result = self.client.chat(
+            prompt,
+            system="你是小说连续性检查员。只检查，不改写正文。",
+            temperature=0.15,
+            max_tokens=3500,
         )
+        verdict = (section(result, "VERDICT") or "").upper()
+        report = section(result, "REPORT") or result
+        return ContinuityReport(passed=verdict.startswith("PASS"), report=report)

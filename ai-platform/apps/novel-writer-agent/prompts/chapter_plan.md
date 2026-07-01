@@ -1,5 +1,8 @@
 请规划第 $chapter_number 章。
 
+最高规则：
+$system_rules
+
 用户本章要求：
 $goal
 
@@ -10,6 +13,10 @@ $goal
 - 明确本章开场、冲突、反转或信息增量、结尾钩子
 - 避免模板化爽文句和 AI 总结腔
 - 遵守原创性规则
+- 必须查询 Character DB、World DB、Lore DB
+- 不得擅自新增人物关系、世界规则、能力体系
+- 本章新增信息原则上不超过 2 个；新增设定原则上不超过 1 个
+- 如果必须新增设定，要写明原因和影响范围
 
 输出内容：
 1. 本章标题候选
@@ -28,8 +35,17 @@ $originality_rules
 小说大框架：
 $story_bible
 
+卷纲与剧情树：
+$outline
+
 人物状态：
 $characters
+
+世界观数据库：
+$world
+
+Lore Database：
+$lore_db
 
 剧情时间线：
 $plot_timeline

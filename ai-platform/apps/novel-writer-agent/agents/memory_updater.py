@@ -10,6 +10,8 @@ from services.memory_store import NovelMemory
 class MemoryUpdate(BaseModel):
     chapter_summary: str
     characters: str
+    world: str
+    lore_db: str
     plot_timeline: str
     foreshadowing: str
     next_hook: str
@@ -26,6 +28,8 @@ class MemoryUpdater:
             title=title,
             chapter=chapter,
             characters=memory.characters,
+            world=memory.world,
+            lore_db=memory.lore_db,
             plot_timeline=memory.plot_timeline,
             foreshadowing=memory.foreshadowing,
             chapter_summaries=memory.chapter_summaries,
@@ -34,6 +38,8 @@ class MemoryUpdater:
         return MemoryUpdate(
             chapter_summary=section(result, "CHAPTER_SUMMARY") or f"第{chapter_number:03d}章《{title}》已完成。",
             characters=section(result, "CHARACTERS") or memory.characters,
+            world=section(result, "WORLD") or memory.world,
+            lore_db=section(result, "LORE_DB") or memory.lore_db,
             plot_timeline=section(result, "PLOT_TIMELINE") or memory.plot_timeline,
             foreshadowing=section(result, "FORESHADOWING") or memory.foreshadowing,
             next_hook=section(result, "NEXT_HOOK") or "下一章继续推进主线冲突。",

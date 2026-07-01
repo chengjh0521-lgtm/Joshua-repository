@@ -6,12 +6,15 @@ from pathlib import Path
 
 from agents.chapter_planner import ChapterPlanner
 from agents.chapter_writer import ChapterWriter
+from agents.continuity_agent import ContinuityAgent
+from agents.editor_gate import EditorGate
 from agents.market_research_agent import MarketResearchAgent
 from agents.memory_updater import MemoryUpdater
 from agents.originality_guard_agent import OriginalityGuardAgent
 from agents.reviewer import Reviewer
 from agents.rewriter import Rewriter
 from agents.short_story_writer import ShortStoryWriter
+from agents.slow_reader import SlowReader
 from agents.story_builder_agent import StoryBuilderAgent
 from agents.trope_extract_agent import TropeExtractAgent
 from config import DATA_DIR, OUTPUT_DIR, PROJECT_ROOT, get_settings
@@ -109,11 +112,86 @@ def command_build(args: argparse.Namespace) -> None:
         originality_rules=store.read("originality_rules.md"),
     )
     store.write("story_bible.md", bundle.story_bible)
+    store.write("outline.md", bundle.outline)
     store.write("characters.md", bundle.characters)
+    store.write("world.md", bundle.world)
+    store.write("lore_db.json", bundle.lore_db)
     store.write("plot_timeline.md", bundle.plot_timeline)
     store.write("foreshadowing.md", bundle.foreshadowing)
     store.write("chapter_summaries.md", "# 章节摘要\n\n尚未生成章节。")
-    print("已生成小说大框架与初始记忆文件。")
+    store.write("slow_reader.md", "# Slow Reader 长期阅读报告\n\n尚未生成。")
+    print("已生成 Professional Novel Pipeline 初始项目文件。")
+
+
+def run_editorial_pipeline(
+    *,
+    client: DeepSeekClient,
+    memory,
+    chapter_number: int,
+    chapter_plan: str,
+    draft_body: str,
+    review_notes: str,
+) -> dict:
+    final_body = draft_body
+    rewrite_notes = ""
+    continuity_report = ""
+    editor_report = ""
+    slow_reader_report = ""
+
+    for attempt in range(1, 6):
+        print(f"Humanizer 去 AI 味改写，第 {attempt} 轮...")
+        rewrite = Rewriter(client).run(
+            final_body,
+            "\n\n".join(
+                part
+                for part in [review_notes, continuity_report, editor_report, slow_reader_report]
+                if part
+            ),
+        )
+        final_body = rewrite.body
+        rewrite_notes = rewrite.notes
+
+        print("Continuity 连续性检查...")
+        continuity = ContinuityAgent(client).check(memory, chapter_plan, final_body)
+        continuity_report = continuity.report
+        if not continuity.passed:
+            print("Continuity: REJECT，退回 Humanizer。")
+            continue
+
+        print("Editor Gate 终审打分...")
+        gate = EditorGate(client).judge(memory, chapter_plan, final_body, attempt)
+        editor_report = gate.report
+        if not gate.passed:
+            print(
+                "Editor Gate: REJECT "
+                f"(编辑评分 {gate.editor_score}, AI相似度 {gate.ai_similarity}, 信息密度 {gate.information_density})"
+            )
+            continue
+
+        print("Slow Reader 连续阅读体验检查...")
+        slow_reader = SlowReader(client).read(memory, chapter_number, final_body)
+        slow_reader_report = slow_reader.report
+        if not slow_reader.passed and attempt < 5:
+            print("Slow Reader: REJECT，退回 Humanizer。")
+            continue
+
+        print("Editor Gate: PASS。")
+        return {
+            "body": final_body,
+            "rewrite_notes": rewrite_notes,
+            "continuity_report": continuity_report,
+            "editor_report": editor_report,
+            "slow_reader_report": slow_reader_report,
+        }
+
+    print("编辑部循环达到 5 次，保留最后一版并标记人工复核风险。")
+    return {
+        "body": final_body,
+        "rewrite_notes": rewrite_notes,
+        "continuity_report": continuity_report,
+        "editor_report": editor_report,
+        "slow_reader_report": slow_reader_report,
+    }
 
 
 def command_write(args: argparse.Namespace) -> None:
@@ -127,7 +205,6 @@ def command_write(args: argparse.Namespace) -> None:
     min_words = getattr(args, "min_words", 100)
     max_words = getattr(args, "max_words", 3000)
     max_paragraphs = getattr(args, "max_paragraphs", 4)
-    remove_ai = getattr(args, "remove_ai", True)
     goal = build_generation_goal(args.goal, min_words, max_words, max_paragraphs)
 
     print(f"开始生成第{chapter_number:03d}章：规划剧情...")
@@ -136,18 +213,19 @@ def command_write(args: argparse.Namespace) -> None:
     print("生成正文草稿...")
     draft = ChapterWriter(client).run(memory, chapter_number, chapter_plan, goal)
 
-    if remove_ai:
-        print("自我审稿...")
-        review_notes = Reviewer(client).run(draft.body, chapter_plan, memory)
+    print("Reviewer 审稿...")
+    review_notes = Reviewer(client).run(draft.body, chapter_plan, memory)
 
-        print("去 AI 味改写...")
-        rewrite = Rewriter(client).run(draft.body, review_notes)
-        final_body = rewrite.body
-        rewrite_notes = rewrite.notes
-    else:
-        review_notes = "未启用去 AI 审稿。"
-        final_body = draft.body
-        rewrite_notes = "未启用去 AI 改写。"
+    pipeline_result = run_editorial_pipeline(
+        client=client,
+        memory=memory,
+        chapter_number=chapter_number,
+        chapter_plan=chapter_plan,
+        draft_body=draft.body,
+        review_notes=review_notes,
+    )
+    final_body = pipeline_result["body"]
+    rewrite_notes = pipeline_result["rewrite_notes"]
 
     print("执行原创性检查...")
     guard = OriginalityGuardAgent(client).check(
@@ -156,7 +234,7 @@ def command_write(args: argparse.Namespace) -> None:
         memory.story_bible,
         memory.trope_library,
     )
-    if remove_ai and not guard.passed:
+    if not guard.passed:
         print("原创性检查提示风险，进行一次定向改写...")
         rewrite = Rewriter(client).run(final_body, review_notes, guard.report)
         final_body = rewrite.body
@@ -182,9 +260,14 @@ def command_write(args: argparse.Namespace) -> None:
                 final_body,
                 f"---审稿意见---\n{review_notes}",
                 f"---改写说明---\n{rewrite_notes}",
+                f"---连续性检查---\n{pipeline_result['continuity_report']}",
+                f"---Editor Gate---\n{pipeline_result['editor_report']}",
+                f"---Slow Reader---\n{pipeline_result['slow_reader_report']}",
                 f"---原创性检查---\n{'通过' if guard.passed else '仍需人工复核'}\n{guard.report}",
                 f"---本章摘要---\n{update.chapter_summary}",
                 f"---人物状态更新---\n{update.characters}",
+                f"---世界观更新---\n{update.world}",
+                f"---Lore Database 更新---\n{update.lore_db}",
                 f"---剧情时间线更新---\n{update.plot_timeline}",
                 f"---伏笔更新---\n{update.foreshadowing}",
                 f"---下一章钩子---\n{update.next_hook}",
@@ -193,10 +276,13 @@ def command_write(args: argparse.Namespace) -> None:
         ),
     )
 
-    append_text(store.root / "chapter_summaries.md", update.chapter_summary)
+    append_text(store.path_for("chapter_summaries.md"), update.chapter_summary)
     store.write("characters.md", update.characters)
+    store.write("world.md", update.world)
+    store.write("lore_db.json", update.lore_db)
     store.write("plot_timeline.md", update.plot_timeline)
     store.write("foreshadowing.md", update.foreshadowing)
+    append_text(store.path_for("slow_reader.md"), pipeline_result["slow_reader_report"])
 
     print(f"已保存 clean: {clean_path}")
     print(f"已保存 with_notes: {notes_path}")
@@ -339,8 +425,11 @@ def command_status(_: argparse.Namespace) -> None:
     chapters = list_clean_chapters()
     summaries = store.read("chapter_summaries.md")
     characters = store.read("characters.md")
+    world = store.read("world.md")
+    lore_db = store.read("lore_db.json")
     foreshadowing = store.read("foreshadowing.md")
     timeline = store.read("plot_timeline.md")
+    slow_reader = store.read("slow_reader.md")
 
     recent_summary = "暂无"
     summary_blocks = [block.strip() for block in summaries.split("\n\n") if block.strip()]
@@ -358,6 +447,12 @@ def command_status(_: argparse.Namespace) -> None:
     print(characters[:1500].rstrip() or "暂无")
     print("\n未回收伏笔：")
     print(foreshadowing[:1500].rstrip() or "暂无")
+    print("\n世界观数据库：")
+    print(world[:1500].rstrip() or "暂无")
+    print("\nLore Database：")
+    print(lore_db[:1500].rstrip() or "暂无")
+    print("\nSlow Reader：")
+    print(slow_reader[:1500].rstrip() or "暂无")
     print("\n下一章建议：")
     print(_next_suggestion(len(chapters), timeline, foreshadowing))
 
