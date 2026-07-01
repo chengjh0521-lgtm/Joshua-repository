@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 import json
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from fastapi import UploadFile
+if TYPE_CHECKING:
+    from fastapi import UploadFile
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -32,6 +36,7 @@ def default_config() -> dict:
         "bilibili_state_file": "",
         "douyin_state_file": "",
         "youtube_cookie_file": "",
+        "youtube_channels": [],
         "video_service_type": "",
         "video_notify_mode": "",
         "video_publish_mode": "",
@@ -68,6 +73,7 @@ def public_config(username: str) -> dict:
     config = load_config(username)
     return {
         "email_receiver": config.get("email_receiver", ""),
+        "youtube_channels": list_video_channels(username),
         "video_service_type": config.get("video_service_type", ""),
         "video_notify_mode": config.get("video_notify_mode", ""),
         "video_publish_mode": config.get("video_publish_mode", ""),
@@ -94,6 +100,58 @@ def update_config(username: str, payload: dict) -> dict:
         if key in payload:
             config[key] = payload[key]
     return save_config(username, config)
+
+
+def list_video_channels(username: str) -> list[dict]:
+    config = load_config(username)
+    channels = config.get("youtube_channels", [])
+    if not isinstance(channels, list):
+        return []
+    cleaned = []
+    for channel in channels:
+        if not isinstance(channel, dict):
+            continue
+        cleaned.append(
+            {
+                "channel_no": str(channel.get("channel_no", "")).strip(),
+                "name": str(channel.get("name", "")).strip(),
+                "url": str(channel.get("url", "")).strip(),
+                "enabled": bool(channel.get("enabled", True)),
+                "bilibili_title": str(channel.get("bilibili_title", "")).strip(),
+                "douyin_collection": str(channel.get("douyin_collection", "")).strip(),
+            }
+        )
+    return cleaned
+
+
+def add_video_channel(username: str, name: str, url: str) -> dict:
+    name = str(name or "").strip()
+    url = str(url or "").strip()
+    if not name:
+        raise ValueError("请填写频道名称。")
+    if not url.startswith(("https://www.youtube.com/", "https://youtube.com/", "https://m.youtube.com/")):
+        raise ValueError("请填写有效的 YouTube 频道链接。")
+
+    config = load_config(username)
+    channels = list_video_channels(username)
+    if any(channel["url"].rstrip("/") == url.rstrip("/") for channel in channels):
+        raise ValueError("该监测频道已经存在。")
+
+    next_no = f"{len(channels) + 1:03d}"
+    channels.append(
+        {
+            "channel_no": next_no,
+            "name": name,
+            "url": url,
+            "enabled": True,
+            "bilibili_title": name,
+            "douyin_collection": name,
+        }
+    )
+    config["youtube_channels"] = channels
+    config["video_service_type"] = "add_pool"
+    save_config(username, config)
+    return public_config(username)
 
 
 def ensure_bilibili_state_target(username: str) -> Path:
@@ -152,6 +210,7 @@ def video_runtime_config(username: str) -> Path:
 
     runtime_config = {
         "runtime_dir": str(runtime_dir.resolve()),
+        "youtube_channels": list_video_channels(username),
         "email_receiver": config.get("email_receiver", ""),
         "video_service_type": service_type,
         "video_notify_mode": notify_mode,

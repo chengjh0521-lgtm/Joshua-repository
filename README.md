@@ -321,3 +321,9 @@ DEEPSEEK_MODEL=deepseek-chat
 ```
 
 生成结果会保存到 `apps/zhihu-writer-agent/txt_outputs/`，运行数据库保存在 `apps/zhihu-writer-agent/backend/data/`。这两个目录已被 `.gitignore` 忽略，并在 `docker-compose.yml` 中挂载持久化。
+
+### 视频监测频道池隔离
+
+视频监测频道池按登录用户隔离，保存在 `backend/data/users/{username}/config.json` 的 `youtube_channels` 中。
+
+网页里选择“添加监测池”会弹出频道名称和 YouTube 频道链接输入框；“查询监测频道”只显示当前登录用户自己的频道池。运行视频监测时，后端会生成当前用户专属的 runtime config、state 文件、下载目录和发布任务文件，不会混用其他用户的数据。
