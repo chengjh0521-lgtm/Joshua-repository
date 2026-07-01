@@ -491,6 +491,10 @@
               <input id="send-email" type="checkbox">
               生成后发送 txt 到邮箱
             </label>
+            <label class="toggle-row">
+              <input id="download-novel" type="checkbox">
+              生成后下载到本地
+            </label>
             <label id="email-row" class="field wide" style="display: none;">
               收件邮箱
               <input id="email-to" type="email" placeholder="name@example.com">
@@ -624,6 +628,10 @@
               <textarea id="zhihu-topic" placeholder="例如：AI 时代，哲学对普通人还有什么用？"></textarea>
               <span class="field-error"></span>
             </label>
+            <label class="toggle-row wide">
+              <input id="download-zhihu" type="checkbox">
+              生成后下载到本地
+            </label>
           </div>
 
           <div class="inline-actions">
@@ -730,6 +738,7 @@
     const fileList = document.getElementById("file-list");
     const sendEmail = document.getElementById("send-email");
     const emailRow = document.getElementById("email-row");
+    const downloadNovel = document.getElementById("download-novel");
     const videoMessage = document.getElementById("video-message");
     const videoResult = document.getElementById("video-result");
     const videoConfigStatus = document.getElementById("video-config-status");
@@ -739,6 +748,7 @@
     const zhihuMessage = document.getElementById("zhihu-message");
     const zhihuResult = document.getElementById("zhihu-result");
     const zhihuPreview = document.getElementById("zhihu-preview");
+    const downloadZhihu = document.getElementById("download-zhihu");
     const workspace = document.getElementById("workspace");
     const workspaceTitle = document.getElementById("workspace-title");
     const workspaceStatus = document.getElementById("workspace-status");
@@ -801,6 +811,16 @@
         throw new Error(data.detail || "请求失败。");
       }
       return data;
+    }
+
+    function downloadUrl(url, filename = "") {
+      const link = document.createElement("a");
+      link.href = url;
+      if (filename) link.download = filename;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
     }
 
     function selectAgent(agent) {
@@ -1216,6 +1236,9 @@
           data.stderr || "(empty)",
         ].filter(Boolean).join("\n");
         latestPreview.textContent = data.latest_file ? `${data.latest_file.relative_path}\n\n${data.latest_file.preview}` : "暂无输出。";
+        if (downloadNovel.checked && data.latest_file && data.latest_file.id) {
+          downloadUrl(`/api/novel/files/${data.latest_file.id}?download=1`, data.latest_file.name || "novel.txt");
+        }
         if (data.account) renderAuth(data.account);
         await refreshFiles();
       } catch (error) {
@@ -1294,6 +1317,9 @@
         zhihuPreview.textContent = result.latest_file
           ? `${result.latest_file.name}\n\n${result.latest_file.preview}`
           : "暂无输出。";
+        if (downloadZhihu.checked && result.latest_file && result.latest_file.id) {
+          downloadUrl(`/api/zhihu/files/${result.latest_file.id}?download=1`, result.latest_file.name || "zhihu.txt");
+        }
       } catch (error) {
         zhihuResult.textContent = error.message;
         zhihuPreview.textContent = "执行失败。";
