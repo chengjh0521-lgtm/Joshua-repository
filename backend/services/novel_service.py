@@ -46,8 +46,7 @@ def _build_generate_command(agent_root: Path, payload: dict) -> list[str]:
     state_setting = _optional_text(payload, "state_setting")
     if not description:
         raise NovelActionError("描述不能为空。")
-    if not style:
-        raise NovelActionError("风格不能为空。")
+    style = style or "自然、有画面感、叙事完整"
 
     min_words = _coerce_int(payload.get("min_words"), "最小字数")
     max_words = _coerce_int(payload.get("max_words") or payload.get("words"), "最大字数")
@@ -63,22 +62,24 @@ def _build_generate_command(agent_root: Path, payload: dict) -> list[str]:
     command = [
         sys.executable,
         str(agent_root / "main.py"),
-        "short" if state_mode == "short" else "write",
-        "--goal",
-        "\n".join(part for part in [state_setting, description] if part),
-        "--style",
-        style,
+        "短篇" if state_mode == "short" else "长篇",
+        "\n".join(part for part in [f"长期设定：{state_setting}" if state_setting else "", f"风格参考：{style}", description] if part),
         "--min-words",
         str(min_words),
         "--max-words",
         str(max_words),
+        "--max-paragraphs",
+        str(_max_paragraphs(state_mode, max_words)),
     ]
-    genre = _optional_text(payload, "genre") or _optional_text(payload, "state_genre")
-    if genre:
-        command.extend(["--genre", genre])
     if bool(payload.get("de_ai")):
-        command.append("--de-ai")
+        command.append("--remove-ai")
     return command
+
+
+def _max_paragraphs(state_mode: str, max_words: int) -> int:
+    if state_mode == "short":
+        return max(4, min(24, max_words // 180))
+    return max(6, min(36, max_words // 160))
 
 
 def build_command(agent_root: Path, payload: dict) -> list[str]:
@@ -93,10 +94,8 @@ def build_command(agent_root: Path, payload: dict) -> list[str]:
         command = [sys.executable, str(agent_root / "main.py"), "build"]
         genre = _optional_text(payload, "state_genre") or _optional_text(payload, "genre")
         style = _optional_text(payload, "state_style") or _optional_text(payload, "style")
-        if genre:
-            command.extend(["--genre", genre])
-        if style:
-            command.extend(["--style", style])
+        command.extend(["--genre", genre or "原创类型小说"])
+        command.extend(["--style", style or "自然、有画面感、叙事完整"])
         return command
 
     command = [sys.executable, str(agent_root / "main.py"), action]
@@ -117,7 +116,7 @@ def build_command(agent_root: Path, payload: dict) -> list[str]:
     if words is not None:
         command.extend(["--max-words", str(words)])
     if bool(payload.get("de_ai")):
-        command.append("--de-ai")
+        command.append("--remove-ai")
 
     return command
 
