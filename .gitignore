@@ -11,6 +11,17 @@ build/
 
 backend/data/accounts.json
 backend/data/accounts.json.tmp
+backend/data/users/
+
+apps/video-publisher-agent/runtime/**
+!apps/video-publisher-agent/runtime/
+!apps/video-publisher-agent/runtime/.gitkeep
+apps/video-publisher-agent/*.png
+apps/video-publisher-agent/*_state.json
+apps/video-publisher-agent/cookies.txt
+apps/video-publisher-agent/state.json
+apps/video-publisher-agent/publish_tasks.json
+apps/video-publisher-agent/youtube素材库/
 
 apps/novel-writer-agent/output/**
 !apps/novel-writer-agent/output/

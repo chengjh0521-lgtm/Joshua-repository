@@ -273,3 +273,24 @@ SMTP_USE_TLS=true
 - 管理员账号 `quota_limit` 为 `null`，不限制次数。
 
 真实运行文件 `backend/data/accounts.json` 已被 `.gitignore` 忽略，避免服务器扣次数后影响 `git pull`。后续可以把这层替换成数据库。
+
+### 视频监管发布 Agent
+
+已接入 `apps/video-publisher-agent`，用于对接 YouTube 监管、下载和发布流程。网页右上角圆形账户按钮里可以配置：
+
+- 邮件收件箱
+- B站登录态 JSON
+- 抖音登录态 JSON
+- YouTube `cookies.txt`
+- 是否下载后自动发布
+- 是否发布到 B站/抖音
+
+运行态配置和上传文件保存在 `backend/data/users/`，该目录已被 `.gitignore` 忽略，不会提交到 GitHub。
+
+网页支持的视频 Agent 操作：
+
+- `status`：检查配置和登录态文件是否存在
+- `check-once`：执行一轮 YouTube 监管、下载和可选发布
+- `upload-pending`：执行已有待发布任务
+
+注意：B站/抖音发布依赖 Playwright 浏览器；Docker 构建会安装 Chromium，首次构建会比较慢。
