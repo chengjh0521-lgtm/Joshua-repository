@@ -12,9 +12,9 @@ from dotenv import load_dotenv
 
 AGENT_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = AGENT_ROOT.parents[1]
-DATA_DIR = AGENT_ROOT / "data"
-OUTPUT_DIR = AGENT_ROOT / "output"
-MEMORY_DIR = AGENT_ROOT / "novel_memory"
+DATA_DIR = Path(os.getenv("NOVEL_AGENT_DATA_DIR", AGENT_ROOT / "data"))
+OUTPUT_DIR = Path(os.getenv("NOVEL_AGENT_OUTPUT_DIR", AGENT_ROOT / "output"))
+MEMORY_DIR = Path(os.getenv("NOVEL_AGENT_MEMORY_DIR", AGENT_ROOT / "novel_memory"))
 PROMPTS_DIR = AGENT_ROOT / "prompts"
 
 CHAPTERS_CLEAN_DIR = OUTPUT_DIR / "chapters_clean"

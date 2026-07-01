@@ -444,25 +444,47 @@
             <div class="required-note">标红字段为必填项</div>
           </div>
 
+          <div class="panel-section">
+            <div class="form-grid">
+              <label class="field">
+                小说状态
+                <select id="novel-state"></select>
+                <span class="field-error"></span>
+              </label>
+              <label class="field">
+                状态名称
+                <input id="novel-state-name" placeholder="例如：短篇、诡楼长篇、赛博悬疑">
+                <span class="field-error"></span>
+              </label>
+              <label class="field">
+                状态类型
+                <select id="novel-state-mode">
+                  <option value="short">短篇</option>
+                  <option value="long">长篇</option>
+                </select>
+                <span class="field-error"></span>
+              </label>
+              <label class="field">
+                题材
+                <input id="novel-state-genre" placeholder="例如：中式恐怖、都市悬疑">
+                <span class="field-error"></span>
+              </label>
+              <label class="field wide">
+                状态设定
+                <textarea id="novel-state-setting" placeholder="写这本小说或这一类短篇需要长期遵守的设定、人物、世界规则、禁忌等。"></textarea>
+                <span class="field-error"></span>
+              </label>
+            </div>
+            <div class="inline-actions">
+              <button id="create-novel-state" class="secondary" type="button">新增状态</button>
+              <button id="save-novel-state" class="secondary" type="button">保存状态设定</button>
+              <button id="delete-novel-state" class="secondary" type="button">删除状态</button>
+              <button id="novel-status" class="secondary" type="button">查看当前状态</button>
+              <button id="novel-init" class="secondary" type="button">初始化记忆</button>
+            </div>
+          </div>
+
           <div class="form-grid">
-            <label class="field">
-              启动动作
-              <select id="novel-action">
-                <option value="generate">生成文章</option>
-                <option value="status">查看状态</option>
-                <option value="init">初始化记忆</option>
-              </select>
-              <span class="field-error"></span>
-            </label>
-            <label class="field">
-              文章类型
-              <select id="article-type">
-                <option value="">请选择文章类型</option>
-                <option value="long">长篇</option>
-                <option value="short">短篇</option>
-              </select>
-              <span class="field-error"></span>
-            </label>
             <label class="field">
               最小字数
               <input id="min-words" type="number" min="100" max="50000" step="100" placeholder="例如：800">
@@ -503,7 +525,7 @@
           </div>
 
           <div class="inline-actions">
-            <button id="run-novel" type="button">启动小说 Agent</button>
+            <button id="run-novel" type="button">写文章</button>
             <button id="refresh-files" class="secondary" type="button">刷新最近文件</button>
           </div>
           <div id="novel-message" class="message"></div>
@@ -749,7 +771,7 @@
   </div>
 
   <script>
-    const state = { authenticated: false, user: null, selectedAgent: null, config: null };
+    const state = { authenticated: false, user: null, selectedAgent: null, config: null, novelStates: [], selectedNovelStateId: "short" };
     const accountButton = document.getElementById("account-button");
     const accountBackdrop = document.getElementById("account-backdrop");
     const accountStatus = document.getElementById("account-status");
@@ -779,9 +801,15 @@
     const workspace = document.getElementById("workspace");
     const workspaceTitle = document.getElementById("workspace-title");
     const workspaceStatus = document.getElementById("workspace-status");
+    const novelStateSelect = document.getElementById("novel-state");
+    const novelStateFields = {
+      name: document.getElementById("novel-state-name"),
+      mode: document.getElementById("novel-state-mode"),
+      genre: document.getElementById("novel-state-genre"),
+      setting: document.getElementById("novel-state-setting"),
+    };
 
     const fields = {
-      article_type: document.getElementById("article-type"),
       min_words: document.getElementById("min-words"),
       max_words: document.getElementById("max-words"),
       description: document.getElementById("description"),
@@ -808,7 +836,7 @@
     const agentMeta = {
       novel: {
         title: "小说 Agent",
-        status: "填写文章类型、字数、描述和风格后启动。",
+        status: "选择小说状态，填写字数、描述和风格后写文章。",
         panel: document.getElementById("novel-panel"),
       },
       video: {
@@ -894,7 +922,11 @@
         refreshVideoServiceStatus();
       }
       if (agent === "novel" && state.authenticated) {
-        refreshFiles();
+        refreshNovelStates()
+          .then(refreshFiles)
+          .catch((error) => {
+            novelMessage.textContent = error.message;
+          });
       }
     }
 
@@ -914,10 +946,50 @@
       configSection.style.display = state.authenticated ? "grid" : "none";
     }
 
+    function currentNovelState() {
+      return state.novelStates.find((item) => item.id === state.selectedNovelStateId) || state.novelStates[0] || null;
+    }
+
+    function renderNovelStates(store) {
+      state.novelStates = store.states || [];
+      state.selectedNovelStateId = store.selected_state_id || (state.novelStates[0] && state.novelStates[0].id) || "short";
+      novelStateSelect.innerHTML = "";
+      state.novelStates.forEach((item) => {
+        const option = document.createElement("option");
+        option.value = item.id;
+        option.textContent = `${item.name} · ${item.mode === "short" ? "短篇" : "长篇"}`;
+        novelStateSelect.appendChild(option);
+      });
+      novelStateSelect.value = state.selectedNovelStateId;
+      renderNovelStateEditor();
+    }
+
+    function renderNovelStateEditor() {
+      const item = currentNovelState();
+      if (!item) return;
+      novelStateFields.name.value = item.name || "";
+      novelStateFields.mode.value = item.mode || "long";
+      novelStateFields.mode.disabled = item.id === "short";
+      novelStateFields.genre.value = item.genre || "";
+      novelStateFields.setting.value = item.setting || "";
+      if (!fields.style.value && item.style) fields.style.value = item.style;
+      document.getElementById("delete-novel-state").disabled = item.id === "short";
+    }
+
+    async function refreshNovelStates() {
+      if (!state.authenticated) {
+        novelStateSelect.innerHTML = "";
+        return;
+      }
+      const store = await requestJson("/api/novel/states");
+      renderNovelStates(store);
+    }
+
     async function refreshMe() {
       const user = await requestJson("/api/auth/me");
       renderAuth(user);
       if (state.authenticated) {
+        await refreshNovelStates();
         await Promise.all([refreshFiles(), refreshConfig(), refreshVideoChannels(), refreshVideoServiceStatus()]);
       }
     }
@@ -928,7 +1000,8 @@
         return;
       }
       try {
-        const files = await requestJson("/api/novel/files");
+        const query = state.selectedNovelStateId ? `?state_id=${encodeURIComponent(state.selectedNovelStateId)}` : "";
+        const files = await requestJson(`/api/novel/files${query}`);
         if (!files.length) {
           fileList.textContent = "暂无输出文件。";
           return;
@@ -937,7 +1010,7 @@
         files.slice(0, 8).forEach((file) => {
           const link = document.createElement("a");
           link.className = "file-link";
-          link.href = `/api/novel/files/${file.id}`;
+          link.href = `/api/novel/files/${file.id}?state_id=${encodeURIComponent(file.state_id || state.selectedNovelStateId)}`;
           link.target = "_blank";
           link.textContent = file.relative_path;
           fileList.appendChild(link);
@@ -1058,7 +1131,7 @@
     }
 
     function clearFieldErrors() {
-      [...Object.values(fields), ...Object.values(videoFields), ...Object.values(zhihuFields), ...Object.values(channelFields)].forEach((field) => {
+      [novelStateSelect, ...Object.values(novelStateFields), ...Object.values(fields), ...Object.values(videoFields), ...Object.values(zhihuFields), ...Object.values(channelFields)].forEach((field) => {
         const wrapper = field.closest(".field");
         const error = wrapper ? wrapper.querySelector(".field-error") : null;
         if (wrapper) wrapper.classList.remove("invalid");
@@ -1082,8 +1155,7 @@
 
     function validateNovel(payload) {
       clearFieldErrors();
-      if (payload.action !== "generate") return true;
-      if (!payload.article_type) addFieldError(fields.article_type, "请选择文章类型。");
+      if (!payload.state_id) addFieldError(novelStateSelect, "请选择小说状态。");
       if (!fields.min_words.value.trim()) addFieldError(fields.min_words, "请填写最小字数。");
       if (!fields.max_words.value.trim()) addFieldError(fields.max_words, "请填写最大字数。");
       if (fields.min_words.value.trim() && Number(fields.min_words.value) < 100) addFieldError(fields.min_words, "最小字数不能小于 100。");
@@ -1170,7 +1242,7 @@
       return config;
     }
 
-    [...Object.values(fields), ...Object.values(videoFields), ...Object.values(zhihuFields), ...Object.values(channelFields)].forEach((field) => {
+    [novelStateSelect, ...Object.values(novelStateFields), ...Object.values(fields), ...Object.values(videoFields), ...Object.values(zhihuFields), ...Object.values(channelFields)].forEach((field) => {
       field.addEventListener("input", () => field.closest(".field")?.classList.remove("invalid"));
       field.addEventListener("change", () => field.closest(".field")?.classList.remove("invalid"));
     });
@@ -1244,6 +1316,7 @@
         });
         renderAuth(data);
         authMessage.textContent = "登录成功。";
+        await refreshNovelStates();
         await Promise.all([refreshFiles(), refreshConfig(), refreshVideoChannels(), refreshVideoServiceStatus()]);
       } catch (error) {
         authMessage.textContent = error.message;
@@ -1254,6 +1327,9 @@
       await requestJson("/api/auth/logout", { method: "POST", body: "{}" });
       renderAuth({ authenticated: false, username: null });
       fileList.textContent = "登录后显示。";
+      novelStateSelect.innerHTML = "";
+      state.novelStates = [];
+      state.selectedNovelStateId = "short";
       videoConfigStatus.textContent = "登录后读取配置。";
       videoChannelList.textContent = "登录后可查询当前账户的监测频道。";
       authMessage.textContent = "已退出登录。";
@@ -1370,6 +1446,135 @@
       }
     });
 
+    novelStateSelect.addEventListener("change", async () => {
+      state.selectedNovelStateId = novelStateSelect.value;
+      renderNovelStateEditor();
+      await refreshFiles();
+    });
+
+    document.getElementById("create-novel-state").addEventListener("click", async () => {
+      novelMessage.textContent = "";
+      if (!state.authenticated) {
+        novelMessage.textContent = "请先登录后再新增状态。";
+        openAccountPanel();
+        return;
+      }
+      try {
+        const store = await requestJson("/api/novel/states", {
+          method: "POST",
+          body: JSON.stringify({
+            name: "新小说",
+            mode: "long",
+            genre: "",
+            style: "",
+            setting: "",
+          }),
+        });
+        renderNovelStates(store);
+        await refreshFiles();
+        novelMessage.textContent = "新状态已创建，请填写设定后保存。";
+      } catch (error) {
+        novelMessage.textContent = error.message;
+      }
+    });
+
+    document.getElementById("save-novel-state").addEventListener("click", async () => {
+      novelMessage.textContent = "";
+      if (!state.authenticated) {
+        novelMessage.textContent = "请先登录后再保存状态。";
+        openAccountPanel();
+        return;
+      }
+      if (!novelStateSelect.value) {
+        addFieldError(novelStateSelect, "请选择小说状态。");
+        focusFirstInvalid();
+        return;
+      }
+      if (!novelStateFields.name.value.trim()) {
+        addFieldError(novelStateFields.name, "请填写状态名称。");
+        focusFirstInvalid();
+        return;
+      }
+      try {
+        const store = await requestJson(`/api/novel/states/${encodeURIComponent(novelStateSelect.value)}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            name: novelStateFields.name.value,
+            mode: novelStateFields.mode.value,
+            genre: novelStateFields.genre.value,
+            style: fields.style.value,
+            setting: novelStateFields.setting.value,
+          }),
+        });
+        renderNovelStates(store);
+        novelMessage.textContent = "状态设定已保存。";
+      } catch (error) {
+        novelMessage.textContent = error.message;
+      }
+    });
+
+    document.getElementById("delete-novel-state").addEventListener("click", async () => {
+      novelMessage.textContent = "";
+      if (!state.authenticated) {
+        novelMessage.textContent = "请先登录后再删除状态。";
+        openAccountPanel();
+        return;
+      }
+      if (!novelStateSelect.value || novelStateSelect.value === "short") {
+        novelMessage.textContent = "默认短篇状态不能删除。";
+        return;
+      }
+      try {
+        const store = await requestJson(`/api/novel/states/${encodeURIComponent(novelStateSelect.value)}`, {
+          method: "DELETE",
+        });
+        renderNovelStates(store);
+        await refreshFiles();
+        novelMessage.textContent = "状态已删除。";
+      } catch (error) {
+        novelMessage.textContent = error.message;
+      }
+    });
+
+    async function runNovelUtility(action) {
+      novelMessage.textContent = "";
+      if (!state.authenticated) {
+        novelMessage.textContent = "请先登录后再使用该功能。";
+        openAccountPanel();
+        return;
+      }
+      if (!novelStateSelect.value) {
+        addFieldError(novelStateSelect, "请选择小说状态。");
+        focusFirstInvalid();
+        return;
+      }
+      resultBox.textContent = "执行中...";
+      try {
+        const data = await requestJson("/api/novel/run", {
+          method: "POST",
+          body: JSON.stringify({
+            action,
+            state_id: novelStateSelect.value,
+          }),
+        });
+        resultBox.textContent = [
+          `returncode: ${data.returncode}`,
+          "",
+          "stdout:",
+          data.stdout || "(empty)",
+          "",
+          "stderr:",
+          data.stderr || "(empty)",
+        ].filter(Boolean).join("\n");
+        latestPreview.textContent = data.latest_file ? `${data.latest_file.relative_path}\n\n${data.latest_file.preview}` : "暂无输出。";
+      } catch (error) {
+        resultBox.textContent = error.message;
+      }
+    }
+
+    document.getElementById("novel-status").addEventListener("click", () => runNovelUtility("status"));
+    document.getElementById("novel-init").addEventListener("click", () => runNovelUtility("init"));
+
     document.getElementById("refresh-files").addEventListener("click", refreshFiles);
 
     document.getElementById("run-novel").addEventListener("click", async () => {
@@ -1380,8 +1585,8 @@
         return;
       }
       const payload = {
-        action: document.getElementById("novel-action").value,
-        article_type: fields.article_type.value,
+        action: "generate",
+        state_id: novelStateSelect.value,
         min_words: Number(fields.min_words.value),
         max_words: Number(fields.max_words.value),
         description: fields.description.value,
@@ -1408,7 +1613,8 @@
         latestPreview.textContent = data.latest_file ? `${data.latest_file.relative_path}\n\n${data.latest_file.preview}` : "暂无输出。";
         if (downloadNovel.checked && data.latest_file && data.latest_file.id) {
           try {
-            await downloadFile(`/api/novel/files/${data.latest_file.id}?download=1`, data.latest_file.name || "novel.txt");
+            const stateQuery = encodeURIComponent(data.latest_file.state_id || payload.state_id);
+            await downloadFile(`/api/novel/files/${data.latest_file.id}?state_id=${stateQuery}&download=1`, data.latest_file.name || "novel.txt");
           } catch (downloadError) {
             novelMessage.textContent = `文件已生成，但自动下载失败：${downloadError.message}`;
           }

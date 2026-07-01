@@ -8,6 +8,7 @@ from .file_service import latest_output_file
 
 ALLOWED_ACTIONS = {"generate", "init", "status", "short", "write", "next"}
 ARTICLE_TYPES = {"long", "short"}
+STATE_MODES = {"long", "short"}
 
 
 class NovelActionError(ValueError):
@@ -27,13 +28,22 @@ def _coerce_int(value: object, field_name: str) -> int | None:
         raise NovelActionError(f"{field_name} 必须是数字。") from exc
 
 
-def _build_generate_command(agent_root: Path, payload: dict) -> list[str]:
+def _state_mode(payload: dict) -> str:
+    mode = _optional_text(payload, "state_mode")
+    if mode in STATE_MODES:
+        return mode
     article_type = _optional_text(payload, "article_type")
-    if article_type not in ARTICLE_TYPES:
-        raise NovelActionError("文章类型必须选择长篇或短篇。")
+    if article_type in ARTICLE_TYPES:
+        return article_type
+    return "short"
+
+
+def _build_generate_command(agent_root: Path, payload: dict) -> list[str]:
+    state_mode = _state_mode(payload)
 
     description = _optional_text(payload, "description") or _optional_text(payload, "goal")
-    style = _optional_text(payload, "style")
+    style = _optional_text(payload, "style") or _optional_text(payload, "state_style")
+    state_setting = _optional_text(payload, "state_setting")
     if not description:
         raise NovelActionError("描述不能为空。")
     if not style:
@@ -53,9 +63,9 @@ def _build_generate_command(agent_root: Path, payload: dict) -> list[str]:
     command = [
         sys.executable,
         str(agent_root / "main.py"),
-        "short" if article_type == "short" else "write",
+        "short" if state_mode == "short" else "write",
         "--goal",
-        description,
+        "\n".join(part for part in [state_setting, description] if part),
         "--style",
         style,
         "--min-words",
@@ -63,7 +73,7 @@ def _build_generate_command(agent_root: Path, payload: dict) -> list[str]:
         "--max-words",
         str(max_words),
     ]
-    genre = _optional_text(payload, "genre")
+    genre = _optional_text(payload, "genre") or _optional_text(payload, "state_genre")
     if genre:
         command.extend(["--genre", genre])
     if bool(payload.get("de_ai")):
@@ -78,6 +88,16 @@ def build_command(agent_root: Path, payload: dict) -> list[str]:
 
     if action == "generate":
         return _build_generate_command(agent_root, payload)
+
+    if action == "init" and _state_mode(payload) == "long":
+        command = [sys.executable, str(agent_root / "main.py"), "build"]
+        genre = _optional_text(payload, "state_genre") or _optional_text(payload, "genre")
+        style = _optional_text(payload, "state_style") or _optional_text(payload, "style")
+        if genre:
+            command.extend(["--genre", genre])
+        if style:
+            command.extend(["--style", style])
+        return command
 
     command = [sys.executable, str(agent_root / "main.py"), action]
     goal = _optional_text(payload, "goal") or _optional_text(payload, "description")
@@ -102,10 +122,19 @@ def build_command(agent_root: Path, payload: dict) -> list[str]:
     return command
 
 
-def run_novel_agent(agent_root: Path, payload: dict, timeout_seconds: int = 900) -> dict:
+def run_novel_agent(
+    agent_root: Path,
+    payload: dict,
+    output_agent_root: Path | None = None,
+    extra_env: dict[str, str] | None = None,
+    timeout_seconds: int = 900,
+) -> dict:
     command = build_command(agent_root, payload)
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
+    if extra_env:
+        env.update(extra_env)
+    output_root = output_agent_root or agent_root
     try:
         completed = subprocess.run(
             command,
@@ -123,12 +152,12 @@ def run_novel_agent(agent_root: Path, payload: dict, timeout_seconds: int = 900)
             "stdout": exc.stdout or "",
             "stderr": f"Agent 执行超时，已停止。超时时间：{timeout_seconds} 秒。",
             "returncode": 124,
-            "latest_file": latest_output_file(agent_root),
+            "latest_file": latest_output_file(output_root),
         }
 
     return {
         "stdout": completed.stdout,
         "stderr": completed.stderr,
         "returncode": completed.returncode,
-        "latest_file": latest_output_file(agent_root),
+        "latest_file": latest_output_file(output_root),
     }
