@@ -43,9 +43,10 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 
 def attachment_headers(name: str) -> dict[str, str]:
+    ascii_name = "".join(char if ord(char) < 128 and char not in {'"', "\\"} else "_" for char in name) or "download.txt"
     return {
         "X-File-Name": name,
-        "Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}",
+        "Content-Disposition": f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name)}",
     }
 
 

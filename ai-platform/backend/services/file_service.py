@@ -58,8 +58,10 @@ def get_output_file(agent_root: Path, file_id: str) -> tuple[ManagedFile, str]:
     relative_path = decode_file_id(file_id)
     path = (output_root / relative_path).resolve()
 
-    if output_root not in path.parents:
-        raise FileNotFoundError("非法文件路径。")
+    try:
+        path.relative_to(output_root)
+    except ValueError as exc:
+        raise FileNotFoundError("非法文件路径。") from exc
     if not path.exists() or path.suffix.lower() != ".txt":
         raise FileNotFoundError("文件不存在。")
 
