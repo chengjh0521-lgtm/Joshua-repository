@@ -527,11 +527,40 @@
               <h2>视频监管发布 Agent</h2>
               <p class="muted">用于对接 Project_09，执行 YouTube 检查、下载和待发布任务。</p>
             </div>
-            <div class="required-note">登录态文件在账户配置中上传</div>
+            <div class="required-note">三项策略均为必填项</div>
           </div>
 
           <div class="form-grid">
-            <label class="field wide">
+            <label class="field">
+              服务类型
+              <select id="video-service-type">
+                <option value="">请选择服务类型</option>
+                <option value="add_pool">添加监测池</option>
+                <option value="monitor_notify">监测 + 通知</option>
+                <option value="monitor_notify_download_publish">监测通知并下载发布</option>
+              </select>
+              <span class="field-error"></span>
+            </label>
+            <label class="field">
+              是否通知
+              <select id="video-notify-mode">
+                <option value="">请选择通知策略</option>
+                <option value="none">不通知</option>
+                <option value="update">仅更新时通知</option>
+                <option value="update_publish">更新与发布时均通知</option>
+              </select>
+              <span class="field-error"></span>
+            </label>
+            <label class="field">
+              是否发布
+              <select id="video-publish-mode">
+                <option value="">请选择发布策略</option>
+                <option value="none">不发布</option>
+                <option value="bilibili">仅发布 B 站</option>
+              </select>
+              <span class="field-error"></span>
+            </label>
+            <label class="field">
               启动动作
               <select id="video-action">
                 <option value="status">检查配置状态</option>
@@ -540,6 +569,17 @@
               </select>
               <span class="field-error"></span>
             </label>
+          </div>
+
+          <div id="bilibili-login-gate" class="panel-section stack" style="display: none;">
+            <h3>B 站登录态</h3>
+            <div id="bilibili-login-message" class="muted">正在检测账户登录态。</div>
+            <div id="bilibili-login-actions" class="inline-actions" style="display: none;">
+              <button id="start-bilibili-login" type="button">添加登录态文件</button>
+              <button id="complete-bilibili-login" class="secondary" type="button">我已登录</button>
+              <button id="upload-bilibili-state-inline" class="secondary" type="button">上传已有文件</button>
+              <input id="video-bilibili-file" type="file" accept=".json,application/json" style="display: none;">
+            </div>
           </div>
 
           <div class="inline-actions">
@@ -634,7 +674,7 @@
   </div>
 
   <script>
-    const state = { authenticated: false, user: null, selectedAgent: null };
+    const state = { authenticated: false, user: null, selectedAgent: null, config: null };
     const accountButton = document.getElementById("account-button");
     const accountBackdrop = document.getElementById("account-backdrop");
     const accountStatus = document.getElementById("account-status");
@@ -650,6 +690,9 @@
     const videoMessage = document.getElementById("video-message");
     const videoResult = document.getElementById("video-result");
     const videoConfigStatus = document.getElementById("video-config-status");
+    const bilibiliLoginGate = document.getElementById("bilibili-login-gate");
+    const bilibiliLoginMessage = document.getElementById("bilibili-login-message");
+    const bilibiliLoginActions = document.getElementById("bilibili-login-actions");
     const workspace = document.getElementById("workspace");
     const workspaceTitle = document.getElementById("workspace-title");
     const workspaceStatus = document.getElementById("workspace-status");
@@ -663,6 +706,12 @@
       email_to: document.getElementById("email-to"),
     };
 
+    const videoFields = {
+      service_type: document.getElementById("video-service-type"),
+      notify_mode: document.getElementById("video-notify-mode"),
+      publish_mode: document.getElementById("video-publish-mode"),
+    };
+
     const agentMeta = {
       novel: {
         title: "小说 Agent",
@@ -671,7 +720,7 @@
       },
       video: {
         title: "视频监管发布 Agent",
-        status: "先在账户配置中上传登录态和 cookie，再启动。",
+        status: "先选择服务、通知和发布策略，再启动。",
         panel: document.getElementById("video-panel"),
       },
     };
@@ -778,6 +827,25 @@
       ].join(" ");
       document.getElementById("config-file-status").innerHTML = html;
       videoConfigStatus.innerHTML = html;
+      renderBilibiliGate(config);
+    }
+
+    function renderBilibiliGate(config = state.config) {
+      const wantsBilibili = videoFields.publish_mode.value === "bilibili";
+      bilibiliLoginGate.style.display = wantsBilibili ? "grid" : "none";
+      if (!wantsBilibili) return;
+      if (!state.authenticated) {
+        bilibiliLoginMessage.textContent = "登录后检测 B 站登录态。";
+        bilibiliLoginActions.style.display = "none";
+        return;
+      }
+      if (config && config.has_bilibili_state) {
+        bilibiliLoginMessage.textContent = "当前账户已保存 B 站登录态，可以发布到 B 站。";
+        bilibiliLoginActions.style.display = "none";
+        return;
+      }
+      bilibiliLoginMessage.textContent = "当前账户还没有 B 站登录态。请添加登录态文件，或上传已有的 bilibili_state.json。";
+      bilibiliLoginActions.style.display = "flex";
     }
 
     async function refreshConfig() {
@@ -786,7 +854,11 @@
         return null;
       }
       const config = await requestJson("/api/user/config");
+      state.config = config;
       document.getElementById("config-email").value = config.email_receiver || "";
+      videoFields.service_type.value = config.video_service_type || "";
+      videoFields.notify_mode.value = config.video_notify_mode || "";
+      videoFields.publish_mode.value = config.video_publish_mode || "";
       document.getElementById("config-auto-publish").checked = Boolean(config.auto_publish);
       document.getElementById("config-bilibili").checked = Boolean(config.auto_publish_bilibili);
       document.getElementById("config-douyin").checked = Boolean(config.auto_publish_douyin);
@@ -795,7 +867,7 @@
     }
 
     function clearFieldErrors() {
-      Object.values(fields).forEach((field) => {
+      [...Object.values(fields), ...Object.values(videoFields)].forEach((field) => {
         const wrapper = field.closest(".field");
         const error = wrapper ? wrapper.querySelector(".field-error") : null;
         if (wrapper) wrapper.classList.remove("invalid");
@@ -838,9 +910,51 @@
       return true;
     }
 
-    Object.values(fields).forEach((field) => {
+    function validateVideoConfig() {
+      clearFieldErrors();
+      if (!videoFields.service_type.value) addFieldError(videoFields.service_type, "请选择服务类型。");
+      if (!videoFields.notify_mode.value) addFieldError(videoFields.notify_mode, "请选择通知策略。");
+      if (!videoFields.publish_mode.value) addFieldError(videoFields.publish_mode, "请选择发布策略。");
+      if (videoFields.publish_mode.value === "bilibili" && videoFields.service_type.value !== "monitor_notify_download_publish") {
+        addFieldError(videoFields.service_type, "发布到 B 站需要选择“监测通知并下载发布”。");
+      }
+      if (document.querySelector(".field.invalid")) {
+        videoMessage.textContent = "请先填写视频 Agent 的必选项。";
+        focusFirstInvalid();
+        return false;
+      }
+      if (videoFields.publish_mode.value === "bilibili" && state.config && !state.config.has_bilibili_state) {
+        videoMessage.textContent = "发布到 B 站前，请先添加 B 站登录态文件。";
+        renderBilibiliGate(state.config);
+        bilibiliLoginGate.scrollIntoView({ behavior: "smooth", block: "center" });
+        return false;
+      }
+      return true;
+    }
+
+    async function saveVideoConfig() {
+      const config = await requestJson("/api/user/config", {
+        method: "POST",
+        body: JSON.stringify({
+          video_service_type: videoFields.service_type.value,
+          video_notify_mode: videoFields.notify_mode.value,
+          video_publish_mode: videoFields.publish_mode.value,
+        }),
+      });
+      state.config = config;
+      renderConfigStatus(config);
+      return config;
+    }
+
+    [...Object.values(fields), ...Object.values(videoFields)].forEach((field) => {
       field.addEventListener("input", () => field.closest(".field")?.classList.remove("invalid"));
       field.addEventListener("change", () => field.closest(".field")?.classList.remove("invalid"));
+    });
+
+    Object.values(videoFields).forEach((field) => {
+      field.addEventListener("change", () => {
+        if (field === videoFields.publish_mode) renderBilibiliGate(state.config);
+      });
     });
 
     document.querySelectorAll(".agent-item:not(.disabled)").forEach((button) => {
@@ -897,6 +1011,9 @@
           method: "POST",
           body: JSON.stringify({
             email_receiver: document.getElementById("config-email").value,
+            video_service_type: videoFields.service_type.value,
+            video_notify_mode: videoFields.notify_mode.value,
+            video_publish_mode: videoFields.publish_mode.value,
             auto_publish: document.getElementById("config-auto-publish").checked,
             auto_publish_bilibili: document.getElementById("config-bilibili").checked,
             auto_publish_douyin: document.getElementById("config-douyin").checked,
@@ -909,8 +1026,7 @@
       }
     });
 
-    document.getElementById("upload-config-files").addEventListener("click", async () => {
-      authMessage.textContent = "";
+    async function uploadConfigFiles(extraForm = null) {
       const form = new FormData();
       const bilibili = document.getElementById("file-bilibili").files[0];
       const douyin = document.getElementById("file-douyin").files[0];
@@ -918,16 +1034,72 @@
       if (bilibili) form.append("bilibili_state", bilibili);
       if (douyin) form.append("douyin_state", douyin);
       if (cookie) form.append("youtube_cookie", cookie);
-      if (![...form.keys()].length) {
-        authMessage.textContent = "请选择至少一个文件。";
-        return;
+      if (extraForm) {
+        for (const [key, value] of extraForm.entries()) form.append(key, value);
       }
+      if (![...form.keys()].length) {
+        throw new Error("请选择至少一个文件。");
+      }
+      const config = await requestJson("/api/user/config/files", { method: "POST", body: form });
+      state.config = config;
+      renderConfigStatus(config);
+      return config;
+    }
+
+    document.getElementById("upload-config-files").addEventListener("click", async () => {
+      authMessage.textContent = "";
       try {
-        await requestJson("/api/user/config/files", { method: "POST", body: form });
+        await uploadConfigFiles();
         authMessage.textContent = "文件已上传。";
-        await refreshConfig();
       } catch (error) {
         authMessage.textContent = error.message;
+      }
+    });
+
+    document.getElementById("start-bilibili-login").addEventListener("click", async () => {
+      videoMessage.textContent = "";
+      bilibiliLoginMessage.textContent = "正在启动 B 站登录页面...";
+      try {
+        const data = await requestJson("/api/video/bilibili-login/start", { method: "POST", body: "{}" });
+        state.config = data.config || state.config;
+        bilibiliLoginMessage.textContent = data.message || "请在打开的浏览器中完成 B 站登录，然后点击“我已登录”。";
+        renderBilibiliGate(state.config);
+        bilibiliLoginActions.style.display = "flex";
+      } catch (error) {
+        bilibiliLoginMessage.textContent = error.message;
+      }
+    });
+
+    document.getElementById("complete-bilibili-login").addEventListener("click", async () => {
+      videoMessage.textContent = "";
+      bilibiliLoginMessage.textContent = "正在保存 B 站登录态...";
+      try {
+        const data = await requestJson("/api/video/bilibili-login/complete", { method: "POST", body: "{}" });
+        state.config = data.config || state.config;
+        renderConfigStatus(state.config);
+        bilibiliLoginMessage.textContent = data.message || "已处理登录态保存。";
+      } catch (error) {
+        bilibiliLoginMessage.textContent = error.message;
+      }
+    });
+
+    document.getElementById("upload-bilibili-state-inline").addEventListener("click", () => {
+      document.getElementById("video-bilibili-file").click();
+    });
+
+    document.getElementById("video-bilibili-file").addEventListener("change", async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      const form = new FormData();
+      form.append("bilibili_state", file);
+      bilibiliLoginMessage.textContent = "正在上传 B 站登录态文件...";
+      try {
+        await uploadConfigFiles(form);
+        bilibiliLoginMessage.textContent = "B 站登录态文件已上传。";
+      } catch (error) {
+        bilibiliLoginMessage.textContent = error.message;
+      } finally {
+        event.target.value = "";
       }
     });
 
@@ -990,8 +1162,16 @@
         openAccountPanel();
         return;
       }
+      if (!validateVideoConfig()) return;
       videoResult.textContent = "执行中...";
       try {
+        await saveVideoConfig();
+        if (videoFields.publish_mode.value === "bilibili" && state.config && !state.config.has_bilibili_state) {
+          videoResult.textContent = "等待 B 站登录态。";
+          videoMessage.textContent = "发布到 B 站前，请先添加 B 站登录态文件。";
+          renderBilibiliGate(state.config);
+          return;
+        }
         const data = await requestJson("/api/video/run", {
           method: "POST",
           body: JSON.stringify({ action: document.getElementById("video-action").value }),

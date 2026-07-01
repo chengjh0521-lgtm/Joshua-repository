@@ -45,6 +45,9 @@ def status() -> int:
     payload = {
         "agent": "video-publisher-agent",
         "email_receiver": CONFIG.get("email_receiver", ""),
+        "video_service_type": CONFIG.get("video_service_type", ""),
+        "video_notify_mode": CONFIG.get("video_notify_mode", ""),
+        "video_publish_mode": CONFIG.get("video_publish_mode", ""),
         "download_enabled": CONFIG.get("download_enabled", False),
         "auto_publish": CONFIG.get("auto_publish", False),
         "auto_publish_bilibili": CONFIG.get("auto_publish_bilibili", False),
