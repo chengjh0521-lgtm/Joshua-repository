@@ -11,10 +11,14 @@ class ChapterPlanner:
     def run(self, memory: NovelMemory, chapter_number: int, goal: str) -> str:
         prompt = self.client.render_prompt(
             "chapter_plan.md",
+            system_rules=memory.system_rules,
             chapter_number=chapter_number,
             goal=goal,
             story_bible=memory.story_bible,
+            outline=memory.outline,
             characters=memory.characters,
+            world=memory.world,
+            lore_db=memory.lore_db,
             plot_timeline=memory.plot_timeline,
             foreshadowing=memory.foreshadowing,
             chapter_summaries=memory.chapter_summaries,
