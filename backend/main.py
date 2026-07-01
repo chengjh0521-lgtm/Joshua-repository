@@ -13,7 +13,12 @@ from backend.services.email_service import EmailConfigError, EmailSendError, sen
 from backend.services.file_service import get_output_file, list_output_files
 from backend.services.novel_service import NovelActionError, run_novel_agent
 from backend.services.user_config_service import public_config, save_upload, update_config
-from backend.services.video_agent_service import VideoAgentError, run_video_agent
+from backend.services.video_agent_service import (
+    VideoAgentError,
+    complete_bilibili_login,
+    run_video_agent,
+    start_bilibili_login,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -56,6 +61,9 @@ class NovelRunPayload(BaseModel):
 
 class UserConfigPayload(BaseModel):
     email_receiver: str | None = None
+    video_service_type: str | None = None
+    video_notify_mode: str | None = None
+    video_publish_mode: str | None = None
     auto_publish: bool | None = None
     auto_publish_bilibili: bool | None = None
     auto_publish_douyin: bool | None = None
@@ -172,6 +180,22 @@ async def video_run(request: Request, payload: VideoRunPayload):
     except VideoAgentError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return JSONResponse(result)
+
+
+@app.post("/api/video/bilibili-login/start")
+async def video_bilibili_login_start(request: Request):
+    username = auth_service.require_login(request)
+    try:
+        result = start_bilibili_login(PROJECT_ROOT, username)
+    except VideoAgentError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return JSONResponse(result)
+
+
+@app.post("/api/video/bilibili-login/complete")
+async def video_bilibili_login_complete(request: Request):
+    username = auth_service.require_login(request)
+    return JSONResponse(complete_bilibili_login(username))
 
 
 @app.get("/api/novel/files")

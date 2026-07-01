@@ -32,6 +32,9 @@ def default_config() -> dict:
         "bilibili_state_file": "",
         "douyin_state_file": "",
         "youtube_cookie_file": "",
+        "video_service_type": "",
+        "video_notify_mode": "",
+        "video_publish_mode": "",
         "auto_publish": False,
         "auto_publish_bilibili": False,
         "auto_publish_douyin": False,
@@ -65,6 +68,9 @@ def public_config(username: str) -> dict:
     config = load_config(username)
     return {
         "email_receiver": config.get("email_receiver", ""),
+        "video_service_type": config.get("video_service_type", ""),
+        "video_notify_mode": config.get("video_notify_mode", ""),
+        "video_publish_mode": config.get("video_publish_mode", ""),
         "auto_publish": bool(config.get("auto_publish", False)),
         "auto_publish_bilibili": bool(config.get("auto_publish_bilibili", False)),
         "auto_publish_douyin": bool(config.get("auto_publish_douyin", False)),
@@ -76,10 +82,37 @@ def public_config(username: str) -> dict:
 
 def update_config(username: str, payload: dict) -> dict:
     config = load_config(username)
-    for key in ("email_receiver", "auto_publish", "auto_publish_bilibili", "auto_publish_douyin"):
+    for key in (
+        "email_receiver",
+        "video_service_type",
+        "video_notify_mode",
+        "video_publish_mode",
+        "auto_publish",
+        "auto_publish_bilibili",
+        "auto_publish_douyin",
+    ):
         if key in payload:
             config[key] = payload[key]
     return save_config(username, config)
+
+
+def ensure_bilibili_state_target(username: str) -> Path:
+    config = load_config(username)
+    target = config.get("bilibili_state_file")
+    if not target:
+        target = str((user_root(username) / "uploads" / "bilibili_state.json").resolve())
+        config["bilibili_state_file"] = target
+        save_config(username, config)
+    return Path(target)
+
+
+def bilibili_login_files(username: str) -> dict:
+    root = user_root(username) / "video_runtime" / "bilibili_login"
+    root.mkdir(parents=True, exist_ok=True)
+    return {
+        "done_file": root / "done.signal",
+        "status_file": root / "status.json",
+    }
 
 
 async def save_upload(username: str, key: str, upload: UploadFile) -> dict:
@@ -107,19 +140,31 @@ def video_runtime_config(username: str) -> Path:
     runtime_dir = root / "video_runtime"
     runtime_dir.mkdir(parents=True, exist_ok=True)
     config = load_config(username)
+    service_type = config.get("video_service_type") or "monitor_notify"
+    notify_mode = config.get("video_notify_mode") or "none"
+    publish_mode = config.get("video_publish_mode") or "none"
+    download_enabled = service_type == "monitor_notify_download_publish"
+    publish_bilibili = download_enabled and publish_mode == "bilibili"
+    email_notify_enabled = notify_mode != "none" and bool(config.get("email_receiver", ""))
+    if publish_bilibili and not config.get("bilibili_state_file"):
+        config["bilibili_state_file"] = str(ensure_bilibili_state_target(username).resolve())
+        save_config(username, config)
 
     runtime_config = {
         "runtime_dir": str(runtime_dir.resolve()),
         "email_receiver": config.get("email_receiver", ""),
-        "email_notify_enabled": bool(config.get("email_receiver")),
-        "download_enabled": True,
-        "auto_publish": bool(config.get("auto_publish", False)),
-        "auto_publish_bilibili": bool(config.get("auto_publish_bilibili", False)),
-        "auto_publish_douyin": bool(config.get("auto_publish_douyin", False)),
-        "publish_to_bilibili": bool(config.get("auto_publish_bilibili", False)),
-        "bilibili_enabled": bool(config.get("auto_publish_bilibili", False)),
-        "publish_to_douyin": bool(config.get("auto_publish_douyin", False)),
-        "douyin_enabled": bool(config.get("auto_publish_douyin", False)),
+        "video_service_type": service_type,
+        "video_notify_mode": notify_mode,
+        "video_publish_mode": publish_mode,
+        "email_notify_enabled": email_notify_enabled,
+        "download_enabled": download_enabled,
+        "auto_publish": publish_bilibili,
+        "auto_publish_bilibili": publish_bilibili,
+        "auto_publish_douyin": False,
+        "publish_to_bilibili": publish_bilibili,
+        "bilibili_enabled": publish_bilibili,
+        "publish_to_douyin": False,
+        "douyin_enabled": False,
         "bilibili_state_file": config.get("bilibili_state_file", ""),
         "douyin_state_file": config.get("douyin_state_file", ""),
         "youtube_cookie_file": config.get("youtube_cookie_file", ""),

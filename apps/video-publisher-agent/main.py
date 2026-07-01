@@ -240,6 +240,9 @@ def send_publish_report_email(video_info: dict, download_result: dict, publish_r
     if not CONFIG.get("email_notify_enabled", False):
         print("邮件通知未开启，跳过发布结果汇总邮件。")
         return False
+    if CONFIG.get("video_notify_mode") != "update_publish":
+        print("当前不是“更新与发布时均通知”模式，跳过发布结果汇总邮件。")
+        return False
 
     try:
         import smtplib
