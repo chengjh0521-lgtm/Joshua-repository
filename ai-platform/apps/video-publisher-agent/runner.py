@@ -2,6 +2,8 @@
 
 import argparse
 import json
+import os
+import time
 import traceback
 from pathlib import Path
 
@@ -71,6 +73,40 @@ def check_once() -> int:
     return 0
 
 
+def stop_requested() -> bool:
+    stop_file = os.getenv("VIDEO_AGENT_STOP_FILE")
+    return bool(stop_file) and Path(stop_file).exists()
+
+
+def monitor_loop() -> int:
+    configure_downloader()
+    from monitor_youtube import check_all_channels_once
+    from main import on_new_video
+
+    interval = int(CONFIG.get("check_interval_seconds", 600))
+    print("video-publisher-agent continuous monitor started", flush=True)
+    print(f"channels: {len(CONFIG.get('youtube_channels', []))}", flush=True)
+    print(f"interval_seconds: {interval}", flush=True)
+
+    while not stop_requested():
+        try:
+            new_videos = check_all_channels_once()
+            print(f"本轮发现新视频：{len(new_videos)}", flush=True)
+            for video_info in new_videos:
+                on_new_video(video_info)
+        except Exception as exc:
+            print(f"持续监控异常：{exc}", flush=True)
+            traceback.print_exc()
+
+        slept = 0
+        while slept < interval and not stop_requested():
+            time.sleep(min(5, interval - slept))
+            slept += 5
+
+    print("video-publisher-agent continuous monitor stopped", flush=True)
+    return 0
+
+
 def upload_pending() -> int:
     from main import run_auto_publishers
 
@@ -84,6 +120,7 @@ def parse_args() -> argparse.Namespace:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("status")
     sub.add_parser("check-once")
+    sub.add_parser("monitor-loop")
     sub.add_parser("upload-pending")
     return parser.parse_args()
 
@@ -95,6 +132,8 @@ def main() -> int:
             return status()
         if args.command == "check-once":
             return check_once()
+        if args.command == "monitor-loop":
+            return monitor_loop()
         if args.command == "upload-pending":
             return upload_pending()
     except Exception as exc:

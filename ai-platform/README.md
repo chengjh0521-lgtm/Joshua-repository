@@ -327,3 +327,5 @@ DEEPSEEK_MODEL=deepseek-chat
 视频监测频道池按登录用户隔离，保存在 `backend/data/users/{username}/config.json` 的 `youtube_channels` 中。
 
 网页里选择“添加监测池”会弹出频道名称和 YouTube 频道链接输入框；“查询监测频道”只显示当前登录用户自己的频道池。运行视频监测时，后端会生成当前用户专属的 runtime config、state 文件、下载目录和发布任务文件，不会混用其他用户的数据。
+
+视频监测服务支持持续运行。用户点击“启动持续监控”后，后端会为当前用户启动独立监控进程；即使用户离开网页，该进程也会继续运行。服务状态、PID、日志和停止信号保存在 `backend/data/users/{username}/video_runtime/service/` 中，网页提供“终止监控”和“刷新服务状态”按钮。
