@@ -6,113 +6,562 @@
   <title>AI 创作平台</title>
   <style>
     :root {
-      --bg: #f6f7f9;
-      --panel: #fff;
+      --bg: #eef1f4;
+      --panel: #ffffff;
+      --sidebar: #f7f8fa;
       --text: #1f2933;
-      --muted: #637083;
+      --muted: #697586;
       --line: #d9e0e8;
       --primary: #146c63;
       --primary-dark: #0f554f;
-      --accent: #b45309;
       --danger: #b42318;
+      --warning: #b45309;
       --ok: #157347;
-      --shadow: 0 12px 32px rgba(31, 41, 51, 0.08);
+      --soft: #eef6f4;
+      --shadow: 0 18px 48px rgba(31, 41, 51, 0.10);
     }
 
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif; background: var(--bg); color: var(--text); }
-    header { border-bottom: 1px solid var(--line); background: #fff; position: sticky; top: 0; z-index: 10; }
-    .topbar, main { max-width: 1180px; margin: 0 auto; padding: 18px 20px; }
-    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-    main { padding-top: 24px; padding-bottom: 44px; }
-    h1 { margin: 0; font-size: 28px; line-height: 1.2; }
-    h2 { margin: 0 0 10px; font-size: 20px; }
-    h3 { margin: 0 0 10px; font-size: 17px; }
-    .muted { color: var(--muted); line-height: 1.6; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
 
-    button { border: 0; border-radius: 8px; padding: 10px 14px; background: var(--primary); color: #fff; cursor: pointer; min-height: 41px; font: inherit; }
+    button, input, select, textarea { font: inherit; }
+    button {
+      border: 0;
+      border-radius: 8px;
+      min-height: 40px;
+      padding: 9px 14px;
+      background: var(--primary);
+      color: #fff;
+      cursor: pointer;
+    }
     button:hover { background: var(--primary-dark); }
     button.secondary { background: #e8edf2; color: var(--text); }
     button.secondary:hover { background: #dbe3eb; }
+    button.ghost { background: transparent; color: var(--muted); }
+    button.ghost:hover { background: #edf1f5; color: var(--text); }
+
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 11px;
+      color: var(--text);
+      background: #fff;
+      outline: none;
+    }
+    textarea { min-height: 132px; resize: vertical; }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(20, 108, 99, 0.14);
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 4px; font-size: 20px; line-height: 1.2; }
+    h2 { margin-bottom: 8px; font-size: 22px; line-height: 1.25; }
+    h3 { margin-bottom: 10px; font-size: 16px; }
+    .muted { color: var(--muted); line-height: 1.6; }
+
+    .app-shell {
+      width: min(1280px, calc(100vw - 28px));
+      height: calc(100vh - 28px);
+      min-height: 720px;
+      margin: 14px auto;
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr);
+      overflow: hidden;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .sidebar {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-width: 0;
+      background: var(--sidebar);
+      border-right: 1px solid var(--line);
+    }
+
+    .sidebar-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 18px;
+      border-bottom: 1px solid var(--line);
+    }
+    .brand-subtitle { margin: 0; font-size: 13px; color: var(--muted); }
 
     .account-button {
-      width: 44px;
-      height: 44px;
+      width: 42px;
+      height: 42px;
+      min-height: 42px;
       border-radius: 999px;
       padding: 0;
       display: inline-grid;
       place-items: center;
+      flex: 0 0 auto;
       font-weight: 700;
       background: #e8edf2;
       color: var(--text);
       border: 2px solid var(--line);
     }
-    .account-button.authed { background: #e8f6f3; border-color: var(--primary); color: var(--primary); }
+    .account-button.authed {
+      background: #e8f6f3;
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .agent-list { overflow: auto; padding: 10px; }
+    .agent-item {
+      width: 100%;
+      min-height: 74px;
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      padding: 10px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text);
+      text-align: left;
+    }
+    .agent-item:hover { background: #edf1f5; }
+    .agent-item.active {
+      background: #e8f6f3;
+      border-color: rgba(20, 108, 99, 0.26);
+    }
+    .agent-item.disabled { opacity: 0.58; cursor: default; }
+    .agent-item.disabled:hover { background: transparent; }
+    .agent-avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: #dfe7ef;
+      color: var(--text);
+      font-weight: 700;
+    }
+    .agent-item.active .agent-avatar {
+      background: var(--primary);
+      color: #fff;
+    }
+    .agent-name { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+    .agent-desc {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .agent-status {
+      display: inline-flex;
+      flex: 0 0 auto;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: #edf1f5;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 400;
+    }
+    .agent-status.ready { background: var(--soft); color: var(--primary); }
+
+    .sidebar-foot {
+      padding: 14px 18px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .workspace {
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      background: #fff;
+    }
+    .workspace.empty { grid-template-rows: 1fr; }
+    .workspace.empty .workspace-top { display: none; }
+    .workspace.empty .workspace-body { padding: 0; }
+    .workspace-top {
+      min-height: 68px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--line);
+    }
+    .workspace-title { margin: 0; font-size: 18px; }
+    .workspace-status { color: var(--muted); font-size: 13px; }
+    .workspace-body { min-height: 0; overflow: auto; padding: 24px; }
+
+    .empty-state {
+      height: 100%;
+      min-height: 520px;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      text-align: center;
+    }
+    .empty-state h2 { color: var(--text); margin-bottom: 8px; }
+    .empty-inner { max-width: 420px; }
+
+    .agent-panel { display: none; max-width: 960px; margin: 0 auto; }
+    .agent-panel.active { display: block; }
+    .panel-intro {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    .required-note {
+      flex: 0 0 auto;
+      color: var(--warning);
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 13px;
+      margin: 14px 0;
+    }
+    .wide { grid-column: 1 / -1; }
+    label { display: grid; gap: 6px; color: var(--muted); font-size: 13px; }
+    .field.invalid input,
+    .field.invalid select,
+    .field.invalid textarea {
+      border-color: var(--danger);
+      box-shadow: 0 0 0 3px rgba(180, 35, 24, 0.13);
+    }
+    .field-error {
+      display: none;
+      color: var(--danger);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .field.invalid .field-error { display: block; }
+
+    .toggle-row {
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text);
+    }
+    .toggle-row input {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 auto;
+    }
+
+    .inline-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .message { min-height: 24px; margin-top: 8px; color: var(--warning); font-size: 14px; }
+    .result {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 13px;
+      margin-top: 16px;
+    }
+    pre {
+      margin: 0;
+      min-height: 190px;
+      max-height: 380px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #111827;
+      color: #e5e7eb;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .preview pre { background: #fbfcfd; color: var(--text); }
+    .file-list { margin-top: 10px; display: grid; gap: 8px; }
+    .file-link {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px 10px;
+      background: #fbfcfd;
+      color: var(--text);
+      text-decoration: none;
+      overflow-wrap: anywhere;
+    }
+    .status-pill {
+      display: inline-flex;
+      width: fit-content;
+      border-radius: 999px;
+      padding: 4px 8px;
+      margin: 3px 4px 0 0;
+      background: #f1f5f9;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .status-pill.ok { background: #e8f6f3; color: var(--ok); }
 
     .panel-backdrop {
       position: fixed;
       inset: 0;
       display: none;
+      justify-content: flex-end;
       background: rgba(15, 23, 42, 0.34);
       z-index: 20;
-      justify-content: flex-end;
     }
     .panel-backdrop.open { display: flex; }
     .account-panel {
-      width: min(420px, 100%);
+      width: min(430px, 100%);
       height: 100%;
       background: #fff;
       box-shadow: -14px 0 40px rgba(15, 23, 42, 0.18);
       padding: 20px;
       overflow: auto;
     }
-    .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-    .panel-section { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
-
-    label { display: grid; gap: 6px; color: var(--muted); font-size: 13px; }
-    input, select, textarea { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 10px 11px; color: var(--text); background: #fff; outline: none; font: inherit; }
-    textarea { min-height: 130px; resize: vertical; }
-    input:focus, select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(20, 108, 99, 0.14); }
-    .field.invalid input, .field.invalid select, .field.invalid textarea { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(180, 35, 24, 0.13); }
-    .field-error { display: none; color: var(--danger); font-size: 12px; line-height: 1.4; }
-    .field.invalid .field-error { display: block; }
-
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .panel-section {
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+      margin-top: 14px;
+    }
     .stack { display: grid; gap: 12px; }
-    .inline-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-    .message { min-height: 24px; margin-top: 8px; color: var(--accent); font-size: 14px; }
 
-    .grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 18px; align-items: start; }
-    .side-grid { display: grid; gap: 14px; }
-    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: 18px; }
-    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 14px 0; }
-    .wide { grid-column: 1 / -1; }
-    .toggle-row { display: flex; align-items: center; gap: 10px; min-height: 42px; color: var(--text); }
-    .toggle-row input { width: 18px; height: 18px; flex: 0 0 auto; }
-    .result { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; margin-top: 14px; }
-    pre { margin: 0; min-height: 180px; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-word; border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: #111827; color: #e5e7eb; font-size: 13px; line-height: 1.55; }
-    .preview pre { background: #fff; color: var(--text); }
-    .file-list { margin-top: 10px; display: grid; gap: 8px; }
-    .file-link { border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; background: #fbfcfd; color: var(--text); text-decoration: none; overflow-wrap: anywhere; }
-    .badge { display: inline-flex; width: fit-content; border-radius: 999px; padding: 4px 9px; background: #eef6f4; color: var(--primary); font-size: 12px; margin-bottom: 8px; }
-    .status-pill { display: inline-flex; border-radius: 999px; padding: 4px 8px; background: #f1f5f9; color: var(--muted); font-size: 12px; }
-    .status-pill.ok { background: #e8f6f3; color: var(--ok); }
-
-    @media (max-width: 900px) {
-      .grid, .result, .form-grid { grid-template-columns: 1fr; }
+    @media (max-width: 920px) {
+      .app-shell {
+        width: 100%;
+        height: auto;
+        min-height: 100vh;
+        margin: 0;
+        grid-template-columns: 1fr;
+        border-radius: 0;
+        border-left: 0;
+        border-right: 0;
+      }
+      .sidebar {
+        grid-template-rows: auto auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .agent-list {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(230px, 1fr);
+        overflow-x: auto;
+      }
+      .sidebar-foot { display: none; }
+      .workspace-body { padding: 18px; }
+      .form-grid, .result { grid-template-columns: 1fr; }
       .wide { grid-column: auto; }
+      .panel-intro { display: grid; }
+      .required-note { width: fit-content; }
     }
   </style>
 </head>
 <body>
-  <header>
-    <div class="topbar">
-      <div>
-        <h1>AI 创作平台</h1>
-        <div class="muted">小说创作与视频自动监管发布</div>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Agent 列表">
+      <div class="sidebar-head">
+        <div>
+          <h1>AI 创作平台</h1>
+          <p class="brand-subtitle">选择一个 Agent 后开始配置</p>
+        </div>
+        <button id="account-button" class="account-button" type="button" title="账户">?</button>
       </div>
-      <button id="account-button" class="account-button" type="button" title="账户">?</button>
-    </div>
-  </header>
+
+      <nav class="agent-list">
+        <button class="agent-item" type="button" data-agent="novel">
+          <span class="agent-avatar">文</span>
+          <span>
+            <span class="agent-name">小说 Agent <span class="agent-status ready">可用</span></span>
+            <span class="agent-desc">生成长篇或短篇故事，支持风格、字数、去 AI 味和邮件发送。</span>
+          </span>
+        </button>
+        <button class="agent-item" type="button" data-agent="video">
+          <span class="agent-avatar">视</span>
+          <span>
+            <span class="agent-name">视频监管发布 Agent <span class="agent-status ready">可用</span></span>
+            <span class="agent-desc">对接 YouTube 监管、下载、任务发布和平台登录态配置。</span>
+          </span>
+        </button>
+        <button class="agent-item disabled" type="button" data-agent="zhihu" disabled>
+          <span class="agent-avatar">知</span>
+          <span>
+            <span class="agent-name">知乎写作 Agent <span class="agent-status">待接入</span></span>
+            <span class="agent-desc">入口先保留，后续接入问答和文章生成流程。</span>
+          </span>
+        </button>
+      </nav>
+
+      <div class="sidebar-foot">
+        当前页面不会自动启动 Agent。点击左侧 Agent 后，右侧会展开启动必填项。
+      </div>
+    </aside>
+
+    <main id="workspace" class="workspace empty">
+      <div class="workspace-top">
+        <div>
+          <h2 id="workspace-title" class="workspace-title">未选择 Agent</h2>
+          <div id="workspace-status" class="workspace-status">右侧工作区当前为空。</div>
+        </div>
+        <button id="open-account-secondary" class="secondary" type="button">账户配置</button>
+      </div>
+
+      <div class="workspace-body">
+        <section id="empty-panel" class="empty-state">
+        </section>
+
+        <section id="novel-panel" class="agent-panel" aria-label="小说 Agent">
+          <div class="panel-intro">
+            <div>
+              <h2>小说 Agent</h2>
+              <p class="muted">用于生成完整文章。生成内容会保存为 txt，查看文件和邮件发送都需要登录。</p>
+            </div>
+            <div class="required-note">标红字段为必填项</div>
+          </div>
+
+          <div class="form-grid">
+            <label class="field">
+              启动动作
+              <select id="novel-action">
+                <option value="generate">生成文章</option>
+                <option value="status">查看状态</option>
+                <option value="init">初始化记忆</option>
+              </select>
+              <span class="field-error"></span>
+            </label>
+            <label class="field">
+              文章类型
+              <select id="article-type">
+                <option value="">请选择文章类型</option>
+                <option value="long">长篇</option>
+                <option value="short">短篇</option>
+              </select>
+              <span class="field-error"></span>
+            </label>
+            <label class="field">
+              最小字数
+              <input id="min-words" type="number" min="100" max="50000" step="100" placeholder="例如：800">
+              <span class="field-error"></span>
+            </label>
+            <label class="field">
+              最大字数
+              <input id="max-words" type="number" min="100" max="50000" step="100" placeholder="例如：3000">
+              <span class="field-error"></span>
+            </label>
+            <label class="field wide">
+              描述
+              <textarea id="description" placeholder="例如：写一个电梯里的中式恐怖短篇故事，结尾要完整解决核心问题"></textarea>
+              <span class="field-error"></span>
+            </label>
+            <label class="field wide">
+              风格
+              <input id="style" placeholder="例如：中式恐怖、冷静克制、完整闭合">
+              <span class="field-error"></span>
+            </label>
+            <label class="toggle-row">
+              <input id="de-ai" type="checkbox">
+              去 AI 味
+            </label>
+            <label class="toggle-row">
+              <input id="send-email" type="checkbox">
+              生成后发送 txt 到邮箱
+            </label>
+            <label id="email-row" class="field wide" style="display: none;">
+              收件邮箱
+              <input id="email-to" type="email" placeholder="name@example.com">
+              <span class="field-error"></span>
+            </label>
+          </div>
+
+          <div class="inline-actions">
+            <button id="run-novel" type="button">启动小说 Agent</button>
+            <button id="refresh-files" class="secondary" type="button">刷新最近文件</button>
+          </div>
+          <div id="novel-message" class="message"></div>
+
+          <div class="result">
+            <div>
+              <h3>执行结果</h3>
+              <pre id="run-result">等待执行...</pre>
+            </div>
+            <div class="preview">
+              <h3>最新输出文件预览</h3>
+              <pre id="latest-preview">暂无输出。</pre>
+            </div>
+          </div>
+
+          <div class="panel-section">
+            <h3>最近文件</h3>
+            <div id="file-list" class="file-list muted">登录后显示。</div>
+          </div>
+        </section>
+
+        <section id="video-panel" class="agent-panel" aria-label="视频监管发布 Agent">
+          <div class="panel-intro">
+            <div>
+              <h2>视频监管发布 Agent</h2>
+              <p class="muted">用于对接 Project_09，执行 YouTube 检查、下载和待发布任务。</p>
+            </div>
+            <div class="required-note">登录态文件在账户配置中上传</div>
+          </div>
+
+          <div class="form-grid">
+            <label class="field wide">
+              启动动作
+              <select id="video-action">
+                <option value="status">检查配置状态</option>
+                <option value="check-once">单轮监管下载发布</option>
+                <option value="upload-pending">执行待发布任务</option>
+              </select>
+              <span class="field-error"></span>
+            </label>
+          </div>
+
+          <div class="inline-actions">
+            <button id="run-video" type="button">启动视频 Agent</button>
+            <button id="open-config-from-video" class="secondary" type="button">打开账户配置</button>
+          </div>
+          <div id="video-message" class="message"></div>
+
+          <div class="result">
+            <div>
+              <h3>执行结果</h3>
+              <pre id="video-result">等待执行...</pre>
+            </div>
+            <div class="preview">
+              <h3>配置文件状态</h3>
+              <div id="video-config-status" class="muted">登录后读取配置。</div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
 
   <div id="account-backdrop" class="panel-backdrop">
     <aside class="account-panel" aria-label="账户面板">
@@ -153,7 +602,7 @@
           </label>
           <label class="toggle-row">
             <input id="config-bilibili" type="checkbox">
-            发布到 B站
+            发布到 B 站
           </label>
           <label class="toggle-row">
             <input id="config-douyin" type="checkbox">
@@ -165,7 +614,7 @@
         <div class="panel-section stack">
           <h3>登录态与 Cookie</h3>
           <label>
-            B站登录态 JSON
+            B 站登录态 JSON
             <input id="file-bilibili" type="file" accept=".json,application/json">
           </label>
           <label>
@@ -184,116 +633,8 @@
     </aside>
   </div>
 
-  <main>
-    <section class="grid">
-      <article class="card">
-        <span class="badge">已接入</span>
-        <h2>小说 Agent</h2>
-        <p class="muted">生成内容会保存为 txt。执行生成、查看文件和邮件发送都需要登录。</p>
-
-        <div class="form-grid">
-          <label class="field">
-            工具操作
-            <select id="novel-action">
-              <option value="generate">生成文章</option>
-              <option value="status">查看状态</option>
-              <option value="init">初始化记忆</option>
-            </select>
-            <span class="field-error"></span>
-          </label>
-          <label class="field">
-            文章类型
-            <select id="article-type">
-              <option value="">请选择文章类型</option>
-              <option value="long">长篇</option>
-              <option value="short">短篇</option>
-            </select>
-            <span class="field-error"></span>
-          </label>
-          <label class="field">
-            最小字数
-            <input id="min-words" type="number" min="100" max="50000" step="100" placeholder="例如：500">
-            <span class="field-error"></span>
-          </label>
-          <label class="field">
-            最大字数
-            <input id="max-words" type="number" min="100" max="50000" step="100" placeholder="例如：1000">
-            <span class="field-error"></span>
-          </label>
-          <label class="field wide">
-            描述
-            <textarea id="description" placeholder="例如：写一个电梯里的中式恐怖小故事，结尾要解决核心问题"></textarea>
-            <span class="field-error"></span>
-          </label>
-          <label class="field wide">
-            风格
-            <input id="style" placeholder="例如：中式恐怖、冷静克制、完整闭合">
-            <span class="field-error"></span>
-          </label>
-          <label class="toggle-row">
-            <input id="de-ai" type="checkbox">
-            去 AI 味
-          </label>
-          <label class="toggle-row">
-            <input id="send-email" type="checkbox">
-            生成后发送 txt 到邮箱
-          </label>
-          <label id="email-row" class="field wide" style="display: none;">
-            收件邮箱
-            <input id="email-to" type="email" placeholder="name@example.com">
-            <span class="field-error"></span>
-          </label>
-        </div>
-
-        <button id="run-novel" type="button">执行</button>
-        <div id="novel-message" class="message"></div>
-
-        <div class="result">
-          <div>
-            <h3>执行结果</h3>
-            <pre id="run-result">等待执行...</pre>
-          </div>
-          <div class="preview">
-            <h3>最新输出文件预览</h3>
-            <pre id="latest-preview">暂无输出。</pre>
-          </div>
-        </div>
-      </article>
-
-      <aside class="side-grid">
-        <article class="card">
-          <span class="badge">新接入</span>
-          <h3>视频监管发布 Agent</h3>
-          <p class="muted">对接 Project_09：监管 YouTube、下载视频、写入发布任务，并可按配置发布到 B站/抖音。</p>
-          <label>
-            操作
-            <select id="video-action">
-              <option value="status">检查配置状态</option>
-              <option value="check-once">单轮监管下载发布</option>
-              <option value="upload-pending">执行待发布任务</option>
-            </select>
-          </label>
-          <div class="inline-actions" style="margin-top: 12px;">
-            <button id="run-video" type="button">执行视频 Agent</button>
-          </div>
-          <div id="video-message" class="message"></div>
-          <pre id="video-result">等待执行...</pre>
-        </article>
-        <article class="card">
-          <span class="badge">后续接入</span>
-          <h3>知乎写作 Agent</h3>
-          <p class="muted">登录后可使用，第一版先保留入口。</p>
-        </article>
-        <article class="card">
-          <h3>最近文件</h3>
-          <div id="file-list" class="file-list muted">登录后显示。</div>
-        </article>
-      </aside>
-    </section>
-  </main>
-
   <script>
-    const state = { authenticated: false, user: null };
+    const state = { authenticated: false, user: null, selectedAgent: null };
     const accountButton = document.getElementById("account-button");
     const accountBackdrop = document.getElementById("account-backdrop");
     const accountStatus = document.getElementById("account-status");
@@ -308,6 +649,10 @@
     const emailRow = document.getElementById("email-row");
     const videoMessage = document.getElementById("video-message");
     const videoResult = document.getElementById("video-result");
+    const videoConfigStatus = document.getElementById("video-config-status");
+    const workspace = document.getElementById("workspace");
+    const workspaceTitle = document.getElementById("workspace-title");
+    const workspaceStatus = document.getElementById("workspace-status");
 
     const fields = {
       article_type: document.getElementById("article-type"),
@@ -318,6 +663,19 @@
       email_to: document.getElementById("email-to"),
     };
 
+    const agentMeta = {
+      novel: {
+        title: "小说 Agent",
+        status: "填写文章类型、字数、描述和风格后启动。",
+        panel: document.getElementById("novel-panel"),
+      },
+      video: {
+        title: "视频监管发布 Agent",
+        status: "先在账户配置中上传登录态和 cookie，再启动。",
+        panel: document.getElementById("video-panel"),
+      },
+    };
+
     async function requestJson(url, options = {}) {
       const headers = options.body instanceof FormData ? {} : { "Content-Type": "application/json" };
       const response = await fetch(url, {
@@ -326,11 +684,41 @@
         ...options,
       });
       const text = await response.text();
-      const data = text ? JSON.parse(text) : {};
+      let data = {};
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { detail: text };
+        }
+      }
       if (!response.ok) {
         throw new Error(data.detail || "请求失败。");
       }
       return data;
+    }
+
+    function selectAgent(agent) {
+      state.selectedAgent = agent;
+      document.querySelectorAll(".agent-item").forEach((item) => {
+        item.classList.toggle("active", item.dataset.agent === agent);
+      });
+      document.getElementById("empty-panel").style.display = "none";
+      workspace.classList.remove("empty");
+      Object.values(agentMeta).forEach((meta) => meta.panel.classList.remove("active"));
+      const meta = agentMeta[agent];
+      if (!meta) return;
+      meta.panel.classList.add("active");
+      workspaceTitle.textContent = meta.title;
+      workspaceStatus.textContent = meta.status;
+      if (agent === "video" && state.authenticated) {
+        refreshConfig().catch((error) => {
+          videoConfigStatus.textContent = error.message;
+        });
+      }
+      if (agent === "novel" && state.authenticated) {
+        refreshFiles();
+      }
     }
 
     function quotaText(user) {
@@ -358,6 +746,10 @@
     }
 
     async function refreshFiles() {
+      if (!state.authenticated) {
+        fileList.textContent = "登录后显示。";
+        return;
+      }
       try {
         const files = await requestJson("/api/novel/files");
         if (!files.length) {
@@ -365,7 +757,7 @@
           return;
         }
         fileList.innerHTML = "";
-        files.slice(0, 6).forEach((file) => {
+        files.slice(0, 8).forEach((file) => {
           const link = document.createElement("a");
           link.className = "file-link";
           link.href = `/api/novel/files/${file.id}`;
@@ -378,17 +770,28 @@
       }
     }
 
+    function renderConfigStatus(config) {
+      const html = [
+        `<span class="status-pill ${config.has_youtube_cookie ? "ok" : ""}">YouTube Cookie：${config.has_youtube_cookie ? "已上传" : "未上传"}</span>`,
+        `<span class="status-pill ${config.has_bilibili_state ? "ok" : ""}">B 站登录态：${config.has_bilibili_state ? "已上传" : "未上传"}</span>`,
+        `<span class="status-pill ${config.has_douyin_state ? "ok" : ""}">抖音登录态：${config.has_douyin_state ? "已上传" : "未上传"}</span>`,
+      ].join(" ");
+      document.getElementById("config-file-status").innerHTML = html;
+      videoConfigStatus.innerHTML = html;
+    }
+
     async function refreshConfig() {
+      if (!state.authenticated) {
+        videoConfigStatus.textContent = "登录后读取配置。";
+        return null;
+      }
       const config = await requestJson("/api/user/config");
       document.getElementById("config-email").value = config.email_receiver || "";
       document.getElementById("config-auto-publish").checked = Boolean(config.auto_publish);
       document.getElementById("config-bilibili").checked = Boolean(config.auto_publish_bilibili);
       document.getElementById("config-douyin").checked = Boolean(config.auto_publish_douyin);
-      document.getElementById("config-file-status").innerHTML = [
-        `<span class="status-pill ${config.has_youtube_cookie ? "ok" : ""}">YouTube Cookie：${config.has_youtube_cookie ? "已上传" : "未上传"}</span>`,
-        `<span class="status-pill ${config.has_bilibili_state ? "ok" : ""}">B站登录态：${config.has_bilibili_state ? "已上传" : "未上传"}</span>`,
-        `<span class="status-pill ${config.has_douyin_state ? "ok" : ""}">抖音登录态：${config.has_douyin_state ? "已上传" : "未上传"}</span>`,
-      ].join(" ");
+      renderConfigStatus(config);
+      return config;
     }
 
     function clearFieldErrors() {
@@ -440,7 +843,17 @@
       field.addEventListener("change", () => field.closest(".field")?.classList.remove("invalid"));
     });
 
-    accountButton.addEventListener("click", () => accountBackdrop.classList.add("open"));
+    document.querySelectorAll(".agent-item:not(.disabled)").forEach((button) => {
+      button.addEventListener("click", () => selectAgent(button.dataset.agent));
+    });
+
+    function openAccountPanel() {
+      accountBackdrop.classList.add("open");
+    }
+
+    accountButton.addEventListener("click", openAccountPanel);
+    document.getElementById("open-account-secondary").addEventListener("click", openAccountPanel);
+    document.getElementById("open-config-from-video").addEventListener("click", openAccountPanel);
     document.getElementById("close-account").addEventListener("click", () => accountBackdrop.classList.remove("open"));
     accountBackdrop.addEventListener("click", (event) => {
       if (event.target === accountBackdrop) accountBackdrop.classList.remove("open");
@@ -469,10 +882,14 @@
       await requestJson("/api/auth/logout", { method: "POST", body: "{}" });
       renderAuth({ authenticated: false, username: null });
       fileList.textContent = "登录后显示。";
+      videoConfigStatus.textContent = "登录后读取配置。";
       authMessage.textContent = "已退出登录。";
     });
 
-    document.getElementById("refresh-config").addEventListener("click", refreshConfig);
+    document.getElementById("refresh-config").addEventListener("click", () => refreshConfig().catch((error) => {
+      authMessage.textContent = error.message;
+    }));
+
     document.getElementById("save-config").addEventListener("click", async () => {
       authMessage.textContent = "";
       try {
@@ -522,11 +939,13 @@
       }
     });
 
+    document.getElementById("refresh-files").addEventListener("click", refreshFiles);
+
     document.getElementById("run-novel").addEventListener("click", async () => {
       novelMessage.textContent = "";
       if (!state.authenticated) {
         novelMessage.textContent = "请先登录后再使用该功能。";
-        accountBackdrop.classList.add("open");
+        openAccountPanel();
         return;
       }
       const payload = {
@@ -568,7 +987,7 @@
       videoMessage.textContent = "";
       if (!state.authenticated) {
         videoMessage.textContent = "请先登录后再使用该功能。";
-        accountBackdrop.classList.add("open");
+        openAccountPanel();
         return;
       }
       videoResult.textContent = "执行中...";
@@ -586,6 +1005,7 @@
           "stderr:",
           data.stderr || "(empty)",
         ].join("\n");
+        await refreshConfig();
       } catch (error) {
         videoResult.textContent = error.message;
       }
