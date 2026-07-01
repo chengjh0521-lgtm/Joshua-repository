@@ -845,14 +845,22 @@
       return data;
     }
 
-    function downloadUrl(url, filename = "") {
+    async function downloadFile(url, filename = "download.txt") {
+      const response = await fetch(url, { credentials: "same-origin" });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || "文件下载失败。");
+      }
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.href = url;
-      if (filename) link.download = filename;
+      link.href = objectUrl;
+      link.download = filename;
       link.style.display = "none";
       document.body.appendChild(link);
       link.click();
       link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     }
 
     function openChannelModal() {
@@ -1399,7 +1407,11 @@
         ].filter(Boolean).join("\n");
         latestPreview.textContent = data.latest_file ? `${data.latest_file.relative_path}\n\n${data.latest_file.preview}` : "暂无输出。";
         if (downloadNovel.checked && data.latest_file && data.latest_file.id) {
-          downloadUrl(`/api/novel/files/${data.latest_file.id}?download=1`, data.latest_file.name || "novel.txt");
+          try {
+            await downloadFile(`/api/novel/files/${data.latest_file.id}?download=1`, data.latest_file.name || "novel.txt");
+          } catch (downloadError) {
+            novelMessage.textContent = `文件已生成，但自动下载失败：${downloadError.message}`;
+          }
         }
         if (data.account) renderAuth(data.account);
         await refreshFiles();
@@ -1493,7 +1505,11 @@
           ? `${result.latest_file.name}\n\n${result.latest_file.preview}`
           : "暂无输出。";
         if (downloadZhihu.checked && result.latest_file && result.latest_file.id) {
-          downloadUrl(`/api/zhihu/files/${result.latest_file.id}?download=1`, result.latest_file.name || "zhihu.txt");
+          try {
+            await downloadFile(`/api/zhihu/files/${result.latest_file.id}?download=1`, result.latest_file.name || "zhihu.txt");
+          } catch (downloadError) {
+            zhihuMessage.textContent = `文件已生成，但自动下载失败：${downloadError.message}`;
+          }
         }
       } catch (error) {
         zhihuResult.textContent = error.message;
