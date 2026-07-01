@@ -19,8 +19,10 @@ def _truthy(value: str | None) -> bool:
 def _get_attachment_path(agent_root: Path, relative_path: str) -> Path:
     output_root = (agent_root / "output").resolve()
     file_path = (output_root / relative_path).resolve()
-    if output_root not in file_path.parents:
-        raise FileNotFoundError("非法附件路径。")
+    try:
+        file_path.relative_to(output_root)
+    except ValueError as exc:
+        raise FileNotFoundError("非法附件路径。") from exc
     if not file_path.exists() or file_path.suffix.lower() != ".txt":
         raise FileNotFoundError("生成文件不存在。")
     return file_path

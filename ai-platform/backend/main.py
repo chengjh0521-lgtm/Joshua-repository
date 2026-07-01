@@ -13,6 +13,15 @@ from backend.services import auth_service
 from backend.services.email_service import EmailConfigError, EmailSendError, send_generated_file_email
 from backend.services.file_service import get_output_file, list_output_files
 from backend.services.novel_service import NovelActionError, run_novel_agent
+from backend.services.novel_state_service import (
+    create_state,
+    delete_state,
+    get_state,
+    list_states,
+    output_agent_root,
+    state_env,
+    update_state,
+)
 from backend.services.user_config_service import add_video_channel, list_video_channels, public_config, save_upload, update_config
 from backend.services.video_agent_service import (
     VideoAgentError,
@@ -44,9 +53,10 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 def attachment_headers(name: str) -> dict[str, str]:
     ascii_name = "".join(char if ord(char) < 128 and char not in {'"', "\\"} else "_" for char in name) or "download.txt"
+    encoded_name = quote(name, safe="")
     return {
-        "X-File-Name": name,
-        "Content-Disposition": f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name)}",
+        "X-File-Name": encoded_name,
+        "Content-Disposition": f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded_name}",
     }
 
 
@@ -57,6 +67,7 @@ class LoginPayload(BaseModel):
 
 class NovelRunPayload(BaseModel):
     action: str = "generate"
+    state_id: str | None = None
     article_type: str | None = None
     min_words: int | None = None
     max_words: int | None = None
@@ -80,6 +91,14 @@ class UserConfigPayload(BaseModel):
     auto_publish: bool | None = None
     auto_publish_bilibili: bool | None = None
     auto_publish_douyin: bool | None = None
+
+
+class NovelStatePayload(BaseModel):
+    name: str | None = None
+    mode: str | None = None
+    genre: str | None = None
+    style: str | None = None
+    setting: str | None = None
 
 
 class VideoRunPayload(BaseModel):
@@ -158,14 +177,38 @@ async def post_user_config_files(
 async def novel_run(request: Request, payload: NovelRunPayload):
     username = auth_service.require_login(request)
     data = payload.model_dump()
+    try:
+        selected_state = get_state(username, payload.state_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    data.update(
+        {
+            "state_id": selected_state["id"],
+            "state_mode": selected_state["mode"],
+            "state_genre": selected_state.get("genre", ""),
+            "state_style": selected_state.get("style", ""),
+            "state_setting": selected_state.get("setting", ""),
+        }
+    )
+    state_root = output_agent_root(username, selected_state["id"])
     should_consume_quota = auth_service.is_token_action(data)
     if should_consume_quota:
         auth_service.ensure_quota_available(username)
 
     try:
-        result = run_novel_agent(AGENT_ROOT, data)
+        result = run_novel_agent(
+            AGENT_ROOT,
+            data,
+            output_agent_root=state_root,
+            extra_env=state_env(username, selected_state["id"]),
+        )
     except NovelActionError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    result["state"] = selected_state
+    if result.get("latest_file"):
+        result["latest_file"]["state_id"] = selected_state["id"]
 
     if should_consume_quota and result.get("returncode") == 0:
         result["account"] = {"authenticated": True, **auth_service.consume_quota(username)}
@@ -176,7 +219,7 @@ async def novel_run(request: Request, payload: NovelRunPayload):
     if payload.send_email and result.get("returncode") == 0 and result.get("latest_file"):
         try:
             send_generated_file_email(
-                agent_root=AGENT_ROOT,
+                agent_root=state_root,
                 relative_path=result["latest_file"]["relative_path"],
                 to_address=payload.email_to or "",
             )
@@ -193,6 +236,39 @@ async def novel_run(request: Request, payload: NovelRunPayload):
             }
 
     return JSONResponse(result)
+
+
+@app.get("/api/novel/states")
+async def novel_states(request: Request):
+    username = auth_service.require_login(request)
+    return list_states(username)
+
+
+@app.post("/api/novel/states")
+async def novel_state_create(request: Request, payload: NovelStatePayload):
+    username = auth_service.require_login(request)
+    try:
+        return create_state(username, payload.model_dump(exclude_none=True))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.put("/api/novel/states/{state_id}")
+async def novel_state_update(request: Request, state_id: str, payload: NovelStatePayload):
+    username = auth_service.require_login(request)
+    try:
+        return update_state(username, state_id, payload.model_dump(exclude_none=True))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/novel/states/{state_id}")
+async def novel_state_delete(request: Request, state_id: str):
+    username = auth_service.require_login(request)
+    try:
+        return delete_state(username, state_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/video/run")
@@ -275,31 +351,50 @@ async def zhihu_file(request: Request, file_id: str, download: bool = False):
         name, content = get_zhihu_output_file(PROJECT_ROOT, file_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    headers = attachment_headers(name) if download else {"X-File-Name": name}
+    headers = attachment_headers(name) if download else {"X-File-Name": quote(name, safe="")}
     return PlainTextResponse(content, media_type="text/plain; charset=utf-8", headers=headers)
 
 
 @app.get("/api/novel/files")
-async def novel_files(request: Request):
-    auth_service.require_login(request)
+async def novel_files(request: Request, state_id: str | None = None):
+    username = auth_service.require_login(request)
+    try:
+        selected_state = get_state(username, state_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    state_root = output_agent_root(username, selected_state["id"])
+    files = list_output_files(state_root)
+    if selected_state["id"] == "short":
+        files = sorted([*files, *list_output_files(AGENT_ROOT)], key=lambda item: item.modified_time, reverse=True)
     return [
         {
             "id": item.id,
             "name": item.name,
             "relative_path": item.relative_path,
+            "state_id": selected_state["id"],
             "size": item.size,
             "modified_time": item.modified_time,
         }
-        for item in list_output_files(AGENT_ROOT)
+        for item in files
     ]
 
 
 @app.get("/api/novel/files/{file_id}")
-async def novel_file(request: Request, file_id: str, download: bool = False):
-    auth_service.require_login(request)
+async def novel_file(request: Request, file_id: str, download: bool = False, state_id: str | None = None):
+    username = auth_service.require_login(request)
     try:
-        item, content = get_output_file(AGENT_ROOT, file_id)
+        selected_state = get_state(username, state_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    state_root = output_agent_root(username, selected_state["id"])
+    try:
+        item, content = get_output_file(state_root, file_id)
     except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    headers = attachment_headers(item.name) if download else {"X-File-Name": item.name}
+        if selected_state["id"] != "short":
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        try:
+            item, content = get_output_file(AGENT_ROOT, file_id)
+        except FileNotFoundError as legacy_exc:
+            raise HTTPException(status_code=404, detail=str(legacy_exc)) from legacy_exc
+    headers = attachment_headers(item.name) if download else {"X-File-Name": quote(item.name, safe="")}
     return PlainTextResponse(content, media_type="text/plain; charset=utf-8", headers=headers)
