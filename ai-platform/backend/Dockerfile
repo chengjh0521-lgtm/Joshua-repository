@@ -10,10 +10,12 @@ WORKDIR /app
 COPY backend/requirements.txt /tmp/backend-requirements.txt
 COPY apps/novel-writer-agent/requirements.txt /tmp/agent-requirements.txt
 COPY apps/video-publisher-agent/requirements.txt /tmp/video-agent-requirements.txt
+COPY apps/zhihu-writer-agent/requirements.txt /tmp/zhihu-agent-requirements.txt
 
 RUN pip install --no-cache-dir -r /tmp/backend-requirements.txt
 RUN pip install --no-cache-dir -r /tmp/agent-requirements.txt
 RUN pip install --no-cache-dir -r /tmp/video-agent-requirements.txt
+RUN pip install --no-cache-dir -r /tmp/zhihu-agent-requirements.txt
 
 ARG INSTALL_PLAYWRIGHT_BROWSERS=false
 RUN if [ "$INSTALL_PLAYWRIGHT_BROWSERS" = "true" ]; then \

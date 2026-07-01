@@ -304,3 +304,20 @@ docker compose build --no-cache
 ```bash
 docker compose build --no-cache --build-arg INSTALL_PLAYWRIGHT_BROWSERS=true
 ```
+
+### 知乎写作 Agent
+
+已接入 `apps/zhihu-writer-agent`，网页左侧选择“知乎写作 Agent”后可生成：
+
+- 知乎长文
+- 知乎想法
+
+该 Agent 使用 `DEEPSEEK_API_KEY`，请在 `.env` 中配置：
+
+```env
+DEEPSEEK_API_KEY=你的 DeepSeek API Key
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-chat
+```
+
+生成结果会保存到 `apps/zhihu-writer-agent/txt_outputs/`，运行数据库保存在 `apps/zhihu-writer-agent/backend/data/`。这两个目录已被 `.gitignore` 忽略，并在 `docker-compose.yml` 中挂载持久化。

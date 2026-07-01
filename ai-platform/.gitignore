@@ -23,6 +23,16 @@ apps/video-publisher-agent/state.json
 apps/video-publisher-agent/publish_tasks.json
 apps/video-publisher-agent/youtube素材库/
 
+apps/zhihu-writer-agent/.env
+apps/zhihu-writer-agent/backend/data/**
+!apps/zhihu-writer-agent/backend/data/
+!apps/zhihu-writer-agent/backend/data/.gitkeep
+!apps/zhihu-writer-agent/backend/data/articles/
+!apps/zhihu-writer-agent/backend/data/articles/.gitkeep
+apps/zhihu-writer-agent/txt_outputs/**
+!apps/zhihu-writer-agent/txt_outputs/
+!apps/zhihu-writer-agent/txt_outputs/.gitkeep
+
 apps/novel-writer-agent/output/**
 !apps/novel-writer-agent/output/
 !apps/novel-writer-agent/output/**/
