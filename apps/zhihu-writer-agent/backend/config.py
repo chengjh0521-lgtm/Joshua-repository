@@ -12,6 +12,19 @@ DATA_DIR = BASE_DIR / "data"
 ARTICLES_DIR = DATA_DIR / "articles"
 TXT_OUTPUTS_DIR = PROJECT_DIR / "txt_outputs"
 PROMPTS_DIR = BASE_DIR / "prompts"
+EDITORIAL_PRINCIPLE_PROMPT = "editorial_principle.md"
+PROMPTS_WITH_EDITORIAL_PRINCIPLE = {
+    "outline.md",
+    "write_article.md",
+    "review_article.md",
+    "rewrite_article.md",
+    "final_check.md",
+    "idea_outline.md",
+    "idea_write.md",
+    "idea_review.md",
+    "idea_rewrite.md",
+    "idea_final_check.md",
+}
 
 load_dotenv(PROJECT_DIR / ".env")
 
@@ -59,4 +72,8 @@ def ensure_runtime_dirs() -> None:
 
 def read_prompt(name: str) -> str:
     prompt_path = PROMPTS_DIR / name
-    return prompt_path.read_text(encoding="utf-8")
+    prompt = prompt_path.read_text(encoding="utf-8")
+    if name in PROMPTS_WITH_EDITORIAL_PRINCIPLE:
+        principle = (PROMPTS_DIR / EDITORIAL_PRINCIPLE_PROMPT).read_text(encoding="utf-8")
+        return principle.rstrip() + "\n\n---\n\n" + prompt
+    return prompt
