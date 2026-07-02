@@ -37,6 +37,8 @@ from backend.services.zhihu_agent_service import ZhihuAgentError, get_zhihu_outp
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 AGENT_ROOT = PROJECT_ROOT / "apps" / "novel-writer-agent"
+MAX_SETTING_FILE_BYTES = 1_000_000
+ALLOWED_SETTING_FILE_SUFFIXES = {".txt", ".md", ".markdown", ".json", ".csv", ".yaml", ".yml"}
 
 load_dotenv(PROJECT_ROOT / ".env")
 
@@ -99,6 +101,7 @@ class NovelStatePayload(BaseModel):
     genre: str | None = None
     style: str | None = None
     setting: str | None = None
+    setting_filename: str | None = None
 
 
 class VideoRunPayload(BaseModel):
@@ -263,6 +266,20 @@ async def novel_state_update(request: Request, state_id: str, payload: NovelStat
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.post("/api/novel/states/{state_id}/setting")
+async def novel_state_import_setting(
+    request: Request,
+    state_id: str,
+    setting_file: UploadFile = File(...),
+):
+    username = auth_service.require_login(request)
+    try:
+        filename, setting = await read_setting_upload(setting_file)
+        return update_state(username, state_id, {"setting": setting, "setting_filename": filename})
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.delete("/api/novel/states/{state_id}")
 async def novel_state_delete(request: Request, state_id: str):
     username = auth_service.require_login(request)
@@ -399,3 +416,32 @@ async def novel_file(request: Request, file_id: str, download: bool = False, sta
             raise HTTPException(status_code=404, detail=str(legacy_exc)) from legacy_exc
     headers = attachment_headers(item.name) if download else {"X-File-Name": quote(item.name, safe="")}
     return PlainTextResponse(content, media_type="text/plain; charset=utf-8", headers=headers)
+
+
+async def read_setting_upload(upload: UploadFile) -> tuple[str, str]:
+    filename = Path(upload.filename or "setting.txt").name
+    suffix = Path(filename).suffix.lower()
+    if suffix not in ALLOWED_SETTING_FILE_SUFFIXES:
+        allowed = "、".join(sorted(ALLOWED_SETTING_FILE_SUFFIXES))
+        raise ValueError(f"暂只支持文本设定文件：{allowed}。doc/docx 请先另存为 txt 或 md。")
+
+    raw = await upload.read()
+    if not raw:
+        raise ValueError("设定文档为空。")
+    if len(raw) > MAX_SETTING_FILE_BYTES:
+        raise ValueError("设定文档不能超过 1MB。")
+
+    text = ""
+    for encoding in ("utf-8-sig", "utf-8", "gb18030", "utf-16"):
+        try:
+            text = raw.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+    if not text:
+        raise ValueError("无法读取设定文档编码，请保存为 UTF-8 文本后重试。")
+
+    text = text.replace("\x00", "").strip()
+    if not text:
+        raise ValueError("设定文档没有可用文本内容。")
+    return filename, text

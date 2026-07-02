@@ -470,14 +470,20 @@
                 <span class="field-error"></span>
               </label>
               <label class="field wide">
-                状态设定
-                <textarea id="novel-state-setting" placeholder="写这本小说或这一类短篇需要长期遵守的设定、人物、世界规则、禁忌等。"></textarea>
+                设定文档
+                <input id="novel-state-setting-file" type="file" accept=".txt,.md,.markdown,.json,.csv,.yaml,.yml,text/plain,text/markdown,application/json,text/csv">
+                <span class="field-error"></span>
+              </label>
+              <label class="field wide">
+                已导入设定预览
+                <textarea id="novel-state-setting" readonly placeholder="尚未导入设定文档。支持 txt、md、json、csv、yaml 等文本文件。"></textarea>
                 <span class="field-error"></span>
               </label>
             </div>
             <div class="inline-actions">
               <button id="create-novel-state" class="secondary" type="button">新增状态</button>
-              <button id="save-novel-state" class="secondary" type="button">保存状态设定</button>
+              <button id="import-novel-setting" class="secondary" type="button">导入设定文档</button>
+              <button id="save-novel-state" class="secondary" type="button">保存状态信息</button>
               <button id="delete-novel-state" class="secondary" type="button">删除状态</button>
               <button id="novel-status" class="secondary" type="button">查看当前状态</button>
               <button id="novel-init" class="secondary" type="button">初始化记忆</button>
@@ -812,6 +818,7 @@
       mode: document.getElementById("novel-state-mode"),
       genre: document.getElementById("novel-state-genre"),
       setting: document.getElementById("novel-state-setting"),
+      settingFile: document.getElementById("novel-state-setting-file"),
     };
 
     const fields = {
@@ -978,6 +985,10 @@
       novelStateFields.mode.disabled = item.id === "short";
       novelStateFields.genre.value = item.genre || "";
       novelStateFields.setting.value = item.setting || "";
+      novelStateFields.setting.placeholder = item.setting_filename
+        ? `已导入：${item.setting_filename}`
+        : "尚未导入设定文档。支持 txt、md、json、csv、yaml 等文本文件。";
+      novelStateFields.settingFile.value = "";
       if (!fields.style.value && item.style) fields.style.value = item.style;
       document.getElementById("delete-novel-state").disabled = item.id === "short";
     }
@@ -1479,7 +1490,40 @@
         });
         renderNovelStates(store);
         await refreshFiles();
-        novelMessage.textContent = "新状态已创建，请填写设定后保存。";
+        novelMessage.textContent = "新状态已创建，请导入设定文档。";
+      } catch (error) {
+        novelMessage.textContent = error.message;
+      }
+    });
+
+    document.getElementById("import-novel-setting").addEventListener("click", async () => {
+      novelMessage.textContent = "";
+      if (!state.authenticated) {
+        novelMessage.textContent = "请先登录后再导入设定文档。";
+        openAccountPanel();
+        return;
+      }
+      if (!novelStateSelect.value) {
+        addFieldError(novelStateSelect, "请选择小说状态。");
+        focusFirstInvalid();
+        return;
+      }
+      if (!novelStateFields.settingFile.files.length) {
+        addFieldError(novelStateFields.settingFile, "请选择设定文档。");
+        focusFirstInvalid();
+        return;
+      }
+      const formData = new FormData();
+      formData.append("setting_file", novelStateFields.settingFile.files[0]);
+      try {
+        const store = await requestJson(`/api/novel/states/${encodeURIComponent(novelStateSelect.value)}/setting`, {
+          method: "POST",
+          body: formData,
+        });
+        renderNovelStates(store);
+        const selected = currentNovelState();
+        const fileName = selected && selected.setting_filename ? selected.setting_filename : "设定文档";
+        novelMessage.textContent = `已导入 ${fileName}。`;
       } catch (error) {
         novelMessage.textContent = error.message;
       }

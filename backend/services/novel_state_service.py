@@ -37,6 +37,7 @@ def _default_state() -> dict:
         "genre": "",
         "style": "",
         "setting": "独立短篇状态。每次生成都只根据本次描述创作，不读取或延续过往记忆。",
+        "setting_filename": "",
         "created_at": _now(),
         "updated_at": _now(),
     }
@@ -90,6 +91,7 @@ def _normalize_state(state: dict) -> dict:
         "genre": str(state.get("genre") or "").strip(),
         "style": str(state.get("style") or "").strip(),
         "setting": str(state.get("setting") or "").strip(),
+        "setting_filename": str(state.get("setting_filename") or "").strip(),
         "created_at": str(state.get("created_at") or _now()),
         "updated_at": str(state.get("updated_at") or _now()),
     }
@@ -145,6 +147,7 @@ def create_state(username: str, payload: dict) -> dict:
             "genre": payload.get("genre") or "",
             "style": payload.get("style") or "",
             "setting": payload.get("setting") or "",
+            "setting_filename": payload.get("setting_filename") or "",
         }
     )
     store["states"].append(state)
