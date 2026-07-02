@@ -120,6 +120,24 @@ python main.py build --genre "悬疑爽文" --style "番茄爆款节奏"
 python main.py write --goal "写开篇，主角卷入第一起异常事件，结尾留下强悬念"
 ```
 
+长篇章节会进入编辑部循环：
+
+```text
+Reviewer
+↓
+Humanizer
+↓
+Continuity
+↓
+Boredom Editor
+↓
+Editor Gate
+↓
+Slow Reader
+```
+
+`Boredom Editor` 会检查这一章是不是每一分钟都在推进剧情。如果整章缺少无效动作、无效对白、无效观察、无效情绪等呼吸感，会 REJECT 并退回 Humanizer。
+
 `next` 是 `write` 的别名：
 
 ```bash

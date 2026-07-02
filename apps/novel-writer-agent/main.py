@@ -4,6 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from agents.boredom_editor import BoredomEditor
 from agents.chapter_planner import ChapterPlanner
 from agents.chapter_writer import ChapterWriter
 from agents.continuity_agent import ContinuityAgent
@@ -135,6 +136,7 @@ def run_editorial_pipeline(
     final_body = draft_body
     rewrite_notes = ""
     continuity_report = ""
+    boredom_report = ""
     editor_report = ""
     slow_reader_report = ""
 
@@ -144,7 +146,7 @@ def run_editorial_pipeline(
             final_body,
             "\n\n".join(
                 part
-                for part in [review_notes, continuity_report, editor_report, slow_reader_report]
+                for part in [review_notes, continuity_report, boredom_report, editor_report, slow_reader_report]
                 if part
             ),
         )
@@ -156,6 +158,13 @@ def run_editorial_pipeline(
         continuity_report = continuity.report
         if not continuity.passed:
             print("Continuity: REJECT，退回 Humanizer。")
+            continue
+
+        print("Boredom Editor 无聊度检查...")
+        boredom = BoredomEditor(client).judge(chapter_plan, final_body)
+        boredom_report = boredom.report
+        if not boredom.passed:
+            print("Boredom Editor: REJECT，章节缺少呼吸，退回 Humanizer。")
             continue
 
         print("Editor Gate 终审打分...")
@@ -180,6 +189,7 @@ def run_editorial_pipeline(
             "body": final_body,
             "rewrite_notes": rewrite_notes,
             "continuity_report": continuity_report,
+            "boredom_report": boredom_report,
             "editor_report": editor_report,
             "slow_reader_report": slow_reader_report,
         }
@@ -189,6 +199,7 @@ def run_editorial_pipeline(
         "body": final_body,
         "rewrite_notes": rewrite_notes,
         "continuity_report": continuity_report,
+        "boredom_report": boredom_report,
         "editor_report": editor_report,
         "slow_reader_report": slow_reader_report,
     }
@@ -261,6 +272,7 @@ def command_write(args: argparse.Namespace) -> None:
                 f"---审稿意见---\n{review_notes}",
                 f"---改写说明---\n{rewrite_notes}",
                 f"---连续性检查---\n{pipeline_result['continuity_report']}",
+                f"---无聊度编辑---\n{pipeline_result['boredom_report']}",
                 f"---Editor Gate---\n{pipeline_result['editor_report']}",
                 f"---Slow Reader---\n{pipeline_result['slow_reader_report']}",
                 f"---原创性检查---\n{'通过' if guard.passed else '仍需人工复核'}\n{guard.report}",
