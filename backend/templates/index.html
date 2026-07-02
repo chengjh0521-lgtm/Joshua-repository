@@ -299,6 +299,16 @@
     }
     .preview pre { background: #fbfcfd; color: var(--text); }
     .file-list { margin-top: 10px; display: grid; gap: 8px; }
+    .file-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px 10px;
+      background: #fbfcfd;
+    }
     .file-link {
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -307,6 +317,17 @@
       color: var(--text);
       text-decoration: none;
       overflow-wrap: anywhere;
+    }
+    .file-row .file-link {
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      background: transparent;
+    }
+    .file-row button {
+      min-height: 32px;
+      padding: 6px 10px;
+      white-space: nowrap;
     }
     .status-pill {
       display: inline-flex;
@@ -782,7 +803,7 @@
   </div>
 
   <script>
-    const state = { authenticated: false, user: null, selectedAgent: null, config: null, novelStates: [], selectedNovelStateId: "short" };
+    const state = { authenticated: false, user: null, selectedAgent: null, config: null, novelStates: [], selectedNovelStateId: "short", novelJobTimer: null };
     const accountButton = document.getElementById("account-button");
     const accountBackdrop = document.getElementById("account-backdrop");
     const accountStatus = document.getElementById("account-status");
@@ -1025,12 +1046,27 @@
         }
         fileList.innerHTML = "";
         files.slice(0, 8).forEach((file) => {
+          const row = document.createElement("div");
+          row.className = "file-row";
           const link = document.createElement("a");
           link.className = "file-link";
           link.href = `/api/novel/files/${file.id}?state_id=${encodeURIComponent(file.state_id || state.selectedNovelStateId)}`;
           link.target = "_blank";
           link.textContent = file.relative_path;
-          fileList.appendChild(link);
+          const downloadButton = document.createElement("button");
+          downloadButton.type = "button";
+          downloadButton.className = "secondary";
+          downloadButton.textContent = "下载";
+          downloadButton.addEventListener("click", async () => {
+            const stateId = encodeURIComponent(file.state_id || state.selectedNovelStateId);
+            try {
+              await downloadFile(`/api/novel/files/${file.id}?state_id=${stateId}&download=1`, file.name || "novel.txt");
+            } catch (error) {
+              novelMessage.textContent = `下载失败：${error.message}`;
+            }
+          });
+          row.append(link, downloadButton);
+          fileList.appendChild(row);
         });
       } catch (error) {
         fileList.textContent = error.message;
@@ -1633,6 +1669,51 @@
 
     document.getElementById("refresh-files").addEventListener("click", refreshFiles);
 
+    async function pollNovelJob(jobId, payload, options = {}) {
+      if (state.novelJobTimer) {
+        window.clearTimeout(state.novelJobTimer);
+        state.novelJobTimer = null;
+      }
+      try {
+        const job = await requestJson(`/api/novel/jobs/${encodeURIComponent(jobId)}`);
+        const finished = ["succeeded", "failed"].includes(job.status);
+        resultBox.textContent = [
+          `job_id: ${job.id}`,
+          `status: ${job.status}`,
+          job.returncode !== null && job.returncode !== undefined ? `returncode: ${job.returncode}` : "",
+          job.email && job.email.requested ? `email: ${job.email.message}` : "",
+          "",
+          "stdout:",
+          job.stdout || "(empty)",
+          "",
+          "stderr:",
+          job.stderr || "(empty)",
+        ].filter(Boolean).join("\n");
+        latestPreview.textContent = job.latest_file
+          ? `${job.latest_file.relative_path}\n\n${job.latest_file.preview}`
+          : (finished ? "暂无输出。" : "后台生成中，可以离开网页。完成后会出现在最近文件里。");
+
+        if (!finished) {
+          state.novelJobTimer = window.setTimeout(() => pollNovelJob(jobId, payload, options), 5000);
+          return;
+        }
+
+        if (job.account) renderAuth(job.account);
+        await refreshFiles();
+        if (options.download && job.latest_file && job.latest_file.id) {
+          try {
+            const stateQuery = encodeURIComponent(job.latest_file.state_id || payload.state_id);
+            await downloadFile(`/api/novel/files/${job.latest_file.id}?state_id=${stateQuery}&download=1`, job.latest_file.name || "novel.txt");
+          } catch (downloadError) {
+            novelMessage.textContent = `文件已生成，但自动下载失败：${downloadError.message}`;
+          }
+        }
+      } catch (error) {
+        resultBox.textContent = error.message;
+        latestPreview.textContent = "任务状态读取失败。";
+      }
+    }
+
     document.getElementById("run-novel").addEventListener("click", async () => {
       novelMessage.textContent = "";
       if (!state.authenticated) {
@@ -1652,10 +1733,21 @@
         email_to: fields.email_to.value,
       };
       if (!validateNovel(payload)) return;
-      resultBox.textContent = "执行中...";
-      latestPreview.textContent = "等待输出...";
+      resultBox.textContent = "正在提交后台任务...";
+      latestPreview.textContent = "任务提交后可以离开网页，生成完成后会显示在最近文件。";
       try {
         const data = await requestJson("/api/novel/run", { method: "POST", body: JSON.stringify(payload) });
+        if (data.background && data.job_id) {
+          resultBox.textContent = [
+            `job_id: ${data.job_id}`,
+            `status: ${data.status || "queued"}`,
+            "",
+            "后台生成已启动。你可以离开网页，完成后刷新最近文件即可看到输出。",
+          ].join("\n");
+          latestPreview.textContent = "后台生成中...";
+          await pollNovelJob(data.job_id, payload, { download: downloadNovel.checked });
+          return;
+        }
         resultBox.textContent = [
           `returncode: ${data.returncode}`,
           data.email && data.email.requested ? `email: ${data.email.message}` : "",

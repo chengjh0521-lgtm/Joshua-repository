@@ -25,6 +25,7 @@ from services.file_manager import (
     chapter_filename,
     ensure_directories,
     list_clean_chapters,
+    next_chapter_number,
     read_text,
     sanitize_filename_part,
     short_story_filename,
@@ -211,7 +212,7 @@ def command_write(args: argparse.Namespace) -> None:
     ensure_directories()
     client = make_client()
 
-    chapter_number = len(list_clean_chapters()) + 1
+    chapter_number = next_chapter_number()
     memory = store.load()
     min_words = getattr(args, "min_words", 100)
     max_words = getattr(args, "max_words", 3000)

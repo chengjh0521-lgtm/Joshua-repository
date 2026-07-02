@@ -13,6 +13,7 @@ from backend.services import auth_service
 from backend.services.email_service import EmailConfigError, EmailSendError, send_generated_file_email
 from backend.services.file_service import get_output_file, list_output_files
 from backend.services.novel_service import NovelActionError, run_novel_agent
+from backend.services.novel_job_service import get_novel_job, start_novel_job
 from backend.services.novel_state_service import (
     create_state,
     delete_state,
@@ -200,6 +201,23 @@ async def novel_run(request: Request, payload: NovelRunPayload):
     if should_consume_quota:
         auth_service.ensure_quota_available(username)
 
+    if str(data.get("action") or "generate").strip() == "generate":
+        try:
+            job = start_novel_job(
+                username=username,
+                agent_root=AGENT_ROOT,
+                payload=data,
+                selected_state=selected_state,
+                output_agent_root=state_root,
+                extra_env=state_env(username, selected_state["id"]),
+                consume_quota_on_success=should_consume_quota,
+                send_email=payload.send_email,
+                email_to=payload.email_to,
+            )
+        except NovelActionError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return JSONResponse({"background": True, "job": job, "job_id": job["id"], "status": job["status"]})
+
     try:
         result = run_novel_agent(
             AGENT_ROOT,
@@ -240,6 +258,15 @@ async def novel_run(request: Request, payload: NovelRunPayload):
             }
 
     return JSONResponse(result)
+
+
+@app.get("/api/novel/jobs/{job_id}")
+async def novel_job_status(request: Request, job_id: str):
+    username = auth_service.require_login(request)
+    try:
+        return get_novel_job(username, job_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.get("/api/novel/states")

@@ -65,3 +65,16 @@ def list_clean_chapters() -> list[Path]:
     if not chapter_dir.exists():
         return []
     return sorted(chapter_dir.glob("第*.txt"))
+
+
+def next_chapter_number() -> int:
+    used_numbers: set[int] = set()
+    for path in list_clean_chapters():
+        match = re.match(r"第(\d+)章_", path.name)
+        if match:
+            used_numbers.add(int(match.group(1)))
+
+    chapter_number = 1
+    while chapter_number in used_numbers:
+        chapter_number += 1
+    return chapter_number
