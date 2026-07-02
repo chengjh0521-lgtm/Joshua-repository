@@ -7,6 +7,9 @@ from pathlib import Path
 
 
 ALLOWED_KINDS = {"article", "idea"}
+DEFAULT_TARGET_WORD_COUNT = 1800
+MIN_TARGET_WORD_COUNT = 800
+MAX_TARGET_WORD_COUNT = 3500
 
 
 class ZhihuAgentError(ValueError):
@@ -36,16 +39,40 @@ def _attach_file_id(agent_root: Path, result: dict | None) -> None:
     latest_file["id"] = encode_file_id(path.relative_to(root).as_posix())
 
 
-def run_zhihu_agent(project_root: Path, kind: str, topic: str, timeout_seconds: int = 900) -> dict:
+def _clamp_target_word_count(value: int | None) -> int:
+    try:
+        target = int(value) if value is not None else DEFAULT_TARGET_WORD_COUNT
+    except (TypeError, ValueError):
+        target = DEFAULT_TARGET_WORD_COUNT
+    return max(MIN_TARGET_WORD_COUNT, min(MAX_TARGET_WORD_COUNT, target))
+
+
+def run_zhihu_agent(
+    project_root: Path,
+    kind: str,
+    topic: str,
+    target_word_count: int | None = None,
+    timeout_seconds: int = 900,
+) -> dict:
     kind = str(kind or "").strip()
     topic = str(topic or "").strip()
+    target_word_count = _clamp_target_word_count(target_word_count)
     if kind not in ALLOWED_KINDS:
         raise ZhihuAgentError("不支持的知乎 Agent 类型。")
     if len(topic) < 2:
         raise ZhihuAgentError("请填写至少 2 个字符的知乎选题。")
 
     agent_root = project_root / "apps" / "zhihu-writer-agent"
-    command = [sys.executable, str(agent_root / "runner.py"), "--kind", kind, "--topic", topic]
+    command = [
+        sys.executable,
+        str(agent_root / "runner.py"),
+        "--kind",
+        kind,
+        "--topic",
+        topic,
+        "--target-word-count",
+        str(target_word_count),
+    ]
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONPATH"] = str(agent_root)

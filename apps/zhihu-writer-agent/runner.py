@@ -3,8 +3,6 @@ import asyncio
 import json
 from pathlib import Path
 
-from backend.main import GenerateArticleRequest, GenerateIdeaRequest, generate_article_draft, generate_idea
-
 
 def preview_file(path_value: str | None, limit: int = 2400) -> dict | None:
     if not path_value:
@@ -22,10 +20,14 @@ def preview_file(path_value: str | None, limit: int = 2400) -> dict | None:
 
 
 async def run(args: argparse.Namespace) -> dict:
+    from backend.main import GenerateArticleRequest, GenerateIdeaRequest, generate_article_draft, generate_idea
+
     if args.kind == "idea":
         response = await generate_idea(GenerateIdeaRequest(topic=args.topic))
     else:
-        response = await generate_article_draft(GenerateArticleRequest(topic=args.topic))
+        response = await generate_article_draft(
+            GenerateArticleRequest(topic=args.topic, target_word_count=args.target_word_count)
+        )
 
     data = response.model_dump()
     data["latest_file"] = preview_file(data.get("text_path") or data.get("markdown_path"))
@@ -36,6 +38,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run the Zhihu writer agent.")
     parser.add_argument("--kind", choices=["article", "idea"], required=True)
     parser.add_argument("--topic", required=True)
+    parser.add_argument("--target-word-count", type=int, default=1800)
     args = parser.parse_args()
 
     try:

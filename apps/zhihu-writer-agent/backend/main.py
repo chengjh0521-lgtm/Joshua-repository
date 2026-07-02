@@ -20,10 +20,14 @@ from backend.services.storage import Storage
 
 app = FastAPI(title="zhihu-writer-agent-deepseek-only", version="0.1.0")
 storage = Storage()
+DEFAULT_TARGET_WORD_COUNT = 1800
+MIN_TARGET_WORD_COUNT = 800
+MAX_TARGET_WORD_COUNT = 3500
 
 
 class GenerateArticleRequest(BaseModel):
     topic: str = Field(min_length=2, max_length=200)
+    target_word_count: int | None = Field(default=None)
 
 
 class GenerateIdeaRequest(BaseModel):
@@ -83,6 +87,7 @@ async def generate_article(payload: GenerateArticleRequest) -> ArticleResponse:
 
 @app.post("/api/articles/generate-draft", response_model=ArticleResponse)
 async def generate_article_draft(payload: GenerateArticleRequest) -> ArticleResponse:
+    target_word_count = clamp_target_word_count(payload.target_word_count)
     article = await _generate_content(
         topic=payload.topic,
         prompt_names={
@@ -92,8 +97,8 @@ async def generate_article_draft(payload: GenerateArticleRequest) -> ArticleResp
             "rewrite": "rewrite_article.md",
             "final_check": "final_check.md",
         },
-        max_paragraphs=5,
         kind="article",
+        target_word_count=target_word_count,
     )
 
     return _article_response(article)
@@ -110,8 +115,8 @@ async def generate_idea(payload: GenerateIdeaRequest) -> ArticleResponse:
             "rewrite": "idea_rewrite.md",
             "final_check": "idea_final_check.md",
         },
-        max_paragraphs=3,
         kind="idea",
+        target_word_count=None,
     )
 
     return _article_response(article)
@@ -121,8 +126,8 @@ async def _generate_content(
     *,
     topic: str,
     prompt_names: dict[str, str],
-    max_paragraphs: int,
     kind: str,
+    target_word_count: int | None,
 ) -> dict[str, Any]:
     article = storage.create_article(topic)
     article_id = article["id"]
@@ -150,24 +155,24 @@ async def _generate_content(
         storage.update_article(article_id, evaluation_json=evaluation_json)
 
         storage.update_article(article_id, status="creating_outline")
-        outline = await outline_agent.create_outline(topic, evaluation_json)
+        outline = await outline_agent.create_outline(topic, evaluation_json, target_word_count)
         storage.update_article(article_id, outline=outline)
 
         storage.update_article(article_id, status="writing_draft")
-        draft = await writer_agent.write(topic, outline)
+        draft = await writer_agent.write(topic, outline, target_word_count)
         storage.update_article(article_id, draft=draft)
 
         storage.update_article(article_id, status="reviewing_draft")
-        review = await reviewer_agent.review(topic, draft)
+        review = await reviewer_agent.review(topic, draft, target_word_count)
         storage.update_article(article_id, review=review)
 
         storage.update_article(article_id, status="rewriting_article")
-        final_article = await rewrite_agent.rewrite(topic, draft, review)
-        final_article = normalize_answer_style(final_article, max_paragraphs=max_paragraphs)
+        final_article = await rewrite_agent.rewrite(topic, draft, review, target_word_count)
+        final_article = normalize_answer_style(final_article)
         storage.update_article(article_id, final_article=final_article)
 
         storage.update_article(article_id, status="final_checking")
-        final_check = await final_check_agent.check(topic, final_article)
+        final_check = await final_check_agent.check(topic, final_article, target_word_count)
         final_check_json = json.dumps(final_check.model_dump(), ensure_ascii=False, indent=2)
 
         text_path = storage.save_text_output(
@@ -233,6 +238,14 @@ def _article_response(article: dict[str, Any]) -> ArticleResponse:
         final_check=_json_or_none(article.get("final_check_json")),
         error=article.get("error"),
     )
+
+
+def clamp_target_word_count(value: int | None) -> int:
+    try:
+        target = int(value) if value is not None else DEFAULT_TARGET_WORD_COUNT
+    except (TypeError, ValueError):
+        target = DEFAULT_TARGET_WORD_COUNT
+    return max(MIN_TARGET_WORD_COUNT, min(MAX_TARGET_WORD_COUNT, target))
 
 
 def _json_or_none(value: Optional[str]) -> Optional[dict[str, Any]]:

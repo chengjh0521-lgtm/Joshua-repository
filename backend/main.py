@@ -113,6 +113,7 @@ class VideoChannelPayload(BaseModel):
 class ZhihuRunPayload(BaseModel):
     kind: str = "article"
     topic: str
+    target_word_count: int | None = None
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -338,7 +339,7 @@ async def video_bilibili_login_complete(request: Request):
 async def zhihu_run(request: Request, payload: ZhihuRunPayload):
     auth_service.require_login(request)
     try:
-        result = run_zhihu_agent(PROJECT_ROOT, payload.kind, payload.topic)
+        result = run_zhihu_agent(PROJECT_ROOT, payload.kind, payload.topic, payload.target_word_count)
     except ZhihuAgentError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return JSONResponse(result)

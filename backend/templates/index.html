@@ -651,6 +651,11 @@
               <textarea id="zhihu-topic" placeholder="例如：AI 时代，哲学对普通人还有什么用？"></textarea>
               <span class="field-error"></span>
             </label>
+            <label class="field">
+              期望字数
+              <input id="zhihu-target-word-count" type="number" min="800" max="3500" value="1800" placeholder="1800">
+              <span class="field-error"></span>
+            </label>
             <label class="toggle-row wide">
               <input id="download-zhihu" type="checkbox">
               生成后下载到本地
@@ -831,6 +836,7 @@
     const zhihuFields = {
       kind: document.getElementById("zhihu-kind"),
       topic: document.getElementById("zhihu-topic"),
+      targetWordCount: document.getElementById("zhihu-target-word-count"),
     };
 
     const agentMeta = {
@@ -1177,6 +1183,8 @@
       if (!zhihuFields.kind.value) addFieldError(zhihuFields.kind, "请选择内容类型。");
       if (!zhihuFields.topic.value.trim()) addFieldError(zhihuFields.topic, "请填写知乎选题。");
       if (zhihuFields.topic.value.trim() && zhihuFields.topic.value.trim().length < 2) addFieldError(zhihuFields.topic, "选题至少需要 2 个字符。");
+      const targetWordCount = Number(zhihuFields.targetWordCount.value || 1800);
+      if (Number.isNaN(targetWordCount)) addFieldError(zhihuFields.targetWordCount, "请填写有效的期望字数。");
       if (document.querySelector(".field.invalid")) {
         zhihuMessage.textContent = "请先填写知乎 Agent 的必填项。";
         focusFirstInvalid();
@@ -1696,6 +1704,7 @@
           body: JSON.stringify({
             kind: zhihuFields.kind.value,
             topic: zhihuFields.topic.value,
+            target_word_count: Number(zhihuFields.targetWordCount.value || 1800),
           }),
         });
         const result = data.result || {};
