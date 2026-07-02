@@ -13,6 +13,7 @@ ARTICLES_DIR = DATA_DIR / "articles"
 TXT_OUTPUTS_DIR = PROJECT_DIR / "txt_outputs"
 PROMPTS_DIR = BASE_DIR / "prompts"
 EDITORIAL_PRINCIPLE_PROMPT = "editorial_principle.md"
+FINANCE_VOICE_PROMPT = "finance_voice.md"
 PROMPTS_WITH_EDITORIAL_PRINCIPLE = {
     "outline.md",
     "write_article.md",
@@ -25,6 +26,7 @@ PROMPTS_WITH_EDITORIAL_PRINCIPLE = {
     "idea_rewrite.md",
     "idea_final_check.md",
 }
+PROMPTS_WITH_FINANCE_VOICE = PROMPTS_WITH_EDITORIAL_PRINCIPLE
 
 load_dotenv(PROJECT_DIR / ".env")
 
@@ -73,7 +75,11 @@ def ensure_runtime_dirs() -> None:
 def read_prompt(name: str) -> str:
     prompt_path = PROMPTS_DIR / name
     prompt = prompt_path.read_text(encoding="utf-8")
+    prefixes: list[str] = []
     if name in PROMPTS_WITH_EDITORIAL_PRINCIPLE:
-        principle = (PROMPTS_DIR / EDITORIAL_PRINCIPLE_PROMPT).read_text(encoding="utf-8")
-        return principle.rstrip() + "\n\n---\n\n" + prompt
+        prefixes.append((PROMPTS_DIR / EDITORIAL_PRINCIPLE_PROMPT).read_text(encoding="utf-8").rstrip())
+    if name in PROMPTS_WITH_FINANCE_VOICE:
+        prefixes.append((PROMPTS_DIR / FINANCE_VOICE_PROMPT).read_text(encoding="utf-8").rstrip())
+    if prefixes:
+        return "\n\n---\n\n".join([*prefixes, prompt])
     return prompt
